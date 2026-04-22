@@ -30,6 +30,9 @@ import {
   Legend,
 } from "recharts";
 
+const STORAGE_KEY = "financial-platform-hebrew-data-v6";
+const USER_STORAGE_KEY = "financial-platform-user-v6";
+
 const incomeCategories = ["משכורת", "עסק", "השקעות", "קצבה", "אחר"];
 const expenseCategories = [
   "מזון",
@@ -48,9 +51,21 @@ const recurrenceOptions = [
   { value: "variable", label: "משתנה" },
 ];
 
+const chartColors = [
+  "#2563eb",
+  "#16a34a",
+  "#dc2626",
+  "#9333ea",
+  "#ea580c",
+  "#0891b2",
+  "#ca8a04",
+  "#4f46e5",
+  "#64748b",
+];
+
 const initialManualTransactions = [
   {
-    id: 2,
+    id: 1,
     type: "expense",
     title: "סופרמרקט",
     category: "מזון",
@@ -59,7 +74,7 @@ const initialManualTransactions = [
     recurrence: "variable",
   },
   {
-    id: 4,
+    id: 2,
     type: "income",
     title: "הכנסה מפרויקט",
     category: "עסק",
@@ -82,21 +97,6 @@ const defaultBudgets = {
   קניות: 1500,
   אחר: 1000,
 };
-
-const STORAGE_KEY = "financial-platform-hebrew-data-v5";
-const USER_STORAGE_KEY = "financial-platform-user-v5";
-
-const chartColors = [
-  "#2563eb",
-  "#16a34a",
-  "#dc2626",
-  "#9333ea",
-  "#ea580c",
-  "#0891b2",
-  "#ca8a04",
-  "#4f46e5",
-  "#64748b",
-];
 
 function formatCurrency(value) {
   return new Intl.NumberFormat("he-IL", {
@@ -147,6 +147,23 @@ function safeDay(year, monthIndex, day) {
   return Math.min(day, lastDay);
 }
 
+function estimateBudgetsFromHousehold(size, kids) {
+  const household = Number(size) || 1;
+  const children = Number(kids) || 0;
+
+  return {
+    מזון: Math.round(1400 + household * 450 + children * 250),
+    דיור: 4500,
+    תחבורה: Math.round(700 + household * 180),
+    בילויים: Math.round(500 + household * 170),
+    חשבונות: Math.round(900 + household * 160),
+    בריאות: Math.round(350 + household * 100),
+    חינוך: Math.round(children * 700),
+    קניות: Math.round(700 + household * 200),
+    אחר: 800,
+  };
+}
+
 function generateRecurringOccurrences(templates, monthsBack = 12, monthsForward = 24) {
   const now = new Date();
   const start = new Date(now.getFullYear(), now.getMonth() - monthsBack, 1);
@@ -191,28 +208,12 @@ function generateRecurringOccurrences(templates, monthsBack = 12, monthsForward 
   return generated;
 }
 
-function estimateBudgetsFromHousehold(size, kids) {
-  const household = Number(size) || 1;
-  const children = Number(kids) || 0;
-  return {
-    מזון: Math.round(1400 + household * 450 + children * 250),
-    דיור: 4500,
-    תחבורה: Math.round(700 + household * 180),
-    בילויים: Math.round(500 + household * 170),
-    חשבונות: Math.round(900 + household * 160),
-    בריאות: Math.round(350 + household * 100),
-    חינוך: Math.round(children * 700),
-    קניות: Math.round(700 + household * 200),
-    אחר: 800,
-  };
-}
-
 function cardStyle() {
   return {
     background: "#fff",
-    borderRadius: 20,
+    borderRadius: 22,
     padding: 20,
-    boxShadow: "0 8px 30px rgba(15,23,42,0.08)",
+    boxShadow: "0 10px 35px rgba(15,23,42,0.08)",
     border: "1px solid #e2e8f0",
   };
 }
@@ -227,7 +228,9 @@ function buttonStyle(kind = "primary") {
     fontWeight: 600,
     display: "inline-flex",
     alignItems: "center",
+    justifyContent: "center",
     gap: 6,
+    transition: "all 0.2s ease",
   };
 
   if (kind === "outline") {
@@ -239,18 +242,18 @@ function buttonStyle(kind = "primary") {
     };
   }
 
-  if (kind === "danger") {
-    return {
-      ...common,
-      background: "#dc2626",
-      color: "#fff",
-    };
-  }
-
   if (kind === "success") {
     return {
       ...common,
       background: "#16a34a",
+      color: "#fff",
+    };
+  }
+
+  if (kind === "danger") {
+    return {
+      ...common,
+      background: "#dc2626",
       color: "#fff",
     };
   }
@@ -274,19 +277,27 @@ function inputStyle() {
   };
 }
 
-function SummaryCard({ title, value, icon, subtitle, color }) {
+function sectionTitleStyle() {
+  return {
+    fontSize: 22,
+    fontWeight: 700,
+    marginBottom: 18,
+  };
+}
+
+function SummaryCard({ title, value, subtitle, color, icon }) {
   return (
     <div style={cardStyle()}>
       <div
         style={{
           display: "flex",
-          alignItems: "flex-start",
           justifyContent: "space-between",
+          alignItems: "flex-start",
           gap: 12,
         }}
       >
         <div>
-          <div style={{ color: "#64748b", fontSize: 14 }}>{title}</div>
+          <div style={{ fontSize: 14, color: "#64748b" }}>{title}</div>
           <div
             style={{
               marginTop: 8,
@@ -303,9 +314,9 @@ function SummaryCard({ title, value, icon, subtitle, color }) {
         </div>
         <div
           style={{
-            background: "#f1f5f9",
-            borderRadius: 16,
             padding: 12,
+            borderRadius: 16,
+            background: "#f1f5f9",
             color: "#334155",
           }}
         >
@@ -333,6 +344,10 @@ function EmptyState({ title, text }) {
       <div style={{ marginTop: 10, color: "#64748b" }}>{text}</div>
     </div>
   );
+}
+
+function numberOrZero(value) {
+  return Number(value) || 0;
 }
 
 export default function App() {
@@ -427,6 +442,11 @@ export default function App() {
     loans: "",
     educationFixed: "",
     insurance: "",
+    currentBalance: "",
+    savings: "",
+    overdraftAmount: "",
+    mainGoal: "להבין לאן הכסף הולך",
+    targetSaving: "",
     suggestedBudgets: estimateBudgetsFromHousehold(1, 0),
   });
 
@@ -455,15 +475,19 @@ export default function App() {
       onboardingData.householdSize,
       onboardingData.childrenCount
     );
+
     setOnboardingData((prev) => ({
       ...prev,
       suggestedBudgets: {
         ...suggested,
-        דיור:
-          Number(prev.housingCost) > 0 ? Number(prev.housingCost) : suggested.דיור,
+        דיור: numberOrZero(prev.housingCost) > 0 ? numberOrZero(prev.housingCost) : suggested.דיור,
       },
     }));
-  }, [onboardingData.householdSize, onboardingData.childrenCount, onboardingData.housingCost]);
+  }, [
+    onboardingData.householdSize,
+    onboardingData.childrenCount,
+    onboardingData.housingCost,
+  ]);
 
   const availableCategories =
     type === "income" ? incomeCategories : expenseCategories;
@@ -617,29 +641,29 @@ export default function App() {
       ...prev,
       suggestedBudgets: {
         ...prev.suggestedBudgets,
-        [categoryName]: Number(value) || 0,
+        [categoryName]: numberOrZero(value),
       },
     }));
   }
 
   function buildRecurringTemplatesFromOnboarding(data) {
     const templates = [];
-    const startDate = new Date();
-    const selectedSalaryDay = Number(data.salaryDay) || 1;
+    const now = new Date();
+    const salaryDay = Number(data.salaryDay) || 1;
 
-    function addTemplateIfPositive(type, title, category, amount, dayOfMonth) {
-      const numericAmount = Number(amount) || 0;
+    function addTemplateIfPositive(typeValue, titleValue, categoryValue, amountValue, dayOfMonth) {
+      const numericAmount = numberOrZero(amountValue);
       if (numericAmount <= 0) return;
 
-      const year = startDate.getFullYear();
-      const month = startDate.getMonth();
+      const year = now.getFullYear();
+      const month = now.getMonth();
       const dateObj = new Date(year, month, safeDay(year, month, dayOfMonth));
 
       templates.push({
-        id: `tpl-${title}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        type,
-        title,
-        category,
+        id: `tpl-${titleValue}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        type: typeValue,
+        title: titleValue,
+        category: categoryValue,
         amount: numericAmount,
         startDate: toISODate(dateObj),
         dayOfMonth,
@@ -647,7 +671,7 @@ export default function App() {
       });
     }
 
-    addTemplateIfPositive("income", "משכורת חודשית", "משכורת", data.mySalary, selectedSalaryDay);
+    addTemplateIfPositive("income", "משכורת חודשית", "משכורת", data.mySalary, salaryDay);
 
     if (data.hasPartnerIncome === "כן") {
       addTemplateIfPositive(
@@ -655,11 +679,12 @@ export default function App() {
         "משכורת בן/בת זוג",
         "משכורת",
         data.partnerSalary,
-        selectedSalaryDay
+        salaryDay
       );
     }
 
-    addTemplateIfPositive("income", "הכנסה נוספת", "אחר", data.otherIncome, selectedSalaryDay);
+    addTemplateIfPositive("income", "הכנסה נוספת", "אחר", data.otherIncome, salaryDay);
+
     addTemplateIfPositive("expense", "שכר דירה / משכנתא", "דיור", data.housingCost, 5);
     addTemplateIfPositive("expense", "ארנונה", "חשבונות", data.arnona, 10);
     addTemplateIfPositive("expense", "חשמל", "חשבונות", data.electricity, 12);
@@ -694,7 +719,7 @@ export default function App() {
   }
 
   function saveTransaction() {
-    if (!title.trim() || !amount || Number(amount) <= 0 || !date || !category) {
+    if (!title.trim() || !amount || numberOrZero(amount) <= 0 || !date || !category) {
       return;
     }
 
@@ -703,7 +728,7 @@ export default function App() {
         type,
         title: title.trim(),
         category,
-        amount: Number(amount),
+        amount: numberOrZero(amount),
         startDate: date,
         dayOfMonth: new Date(date).getDate(),
         recurrence: "fixed",
@@ -729,7 +754,7 @@ export default function App() {
         type,
         title: title.trim(),
         category,
-        amount: Number(amount),
+        amount: numberOrZero(amount),
         date,
         recurrence: "variable",
       };
@@ -788,9 +813,7 @@ export default function App() {
 
   function onTypeChange(nextType) {
     setType(nextType);
-    setCategory(
-      nextType === "income" ? incomeCategories[0] : expenseCategories[0]
-    );
+    setCategory(nextType === "income" ? incomeCategories[0] : expenseCategories[0]);
   }
 
   function handleLogin() {
@@ -814,7 +837,7 @@ export default function App() {
   function updateBudget(categoryName, value) {
     setBudgets((prev) => ({
       ...prev,
-      [categoryName]: Number(value) || 0,
+      [categoryName]: numberOrZero(value),
     }));
   }
 
@@ -861,9 +884,7 @@ export default function App() {
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `financial-report-${new Date()
-      .toISOString()
-      .slice(0, 10)}.csv`;
+    link.download = `financial-report-${new Date().toISOString().slice(0, 10)}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -886,6 +907,7 @@ export default function App() {
       "משק בית",
       "הכנסות",
       "הוצאות קבועות",
+      "תמונה פיננסית",
       "תקציב משתנה",
       "סיכום",
     ];
@@ -894,13 +916,18 @@ export default function App() {
     const previewIncome = summaryTemplatesPreview
       .filter((t) => t.type === "income")
       .reduce((sum, t) => sum + t.amount, 0);
-    const previewExpense = summaryTemplatesPreview
+
+    const previewFixedExpense = summaryTemplatesPreview
       .filter((t) => t.type === "expense")
       .reduce((sum, t) => sum + t.amount, 0);
+
     const previewVariableBudget = Object.values(onboardingData.suggestedBudgets).reduce(
-      (sum, value) => sum + Number(value || 0),
+      (sum, value) => sum + numberOrZero(value),
       0
     );
+
+    const expectedBalance =
+      previewIncome - previewFixedExpense - previewVariableBudget;
 
     return (
       <div
@@ -914,7 +941,7 @@ export default function App() {
           padding: 24,
         }}
       >
-        <div style={{ maxWidth: 980, margin: "0 auto" }}>
+        <div style={{ maxWidth: 1040, margin: "0 auto" }}>
           <div
             style={{
               background: "rgba(255,255,255,0.08)",
@@ -953,38 +980,54 @@ export default function App() {
 
             {onboardingStep === 0 && (
               <div style={{ display: "grid", gap: 20 }}>
-                <div style={{ fontSize: 20, lineHeight: 1.8, color: "#e2e8f0" }}>
-                  בוא נגדיר יחד את המערכת שלך תוך 2–3 דקות. בסיום,
-                  הדשבורד שלך יגיע מוכן עם הכנסות קבועות, הוצאות קבועות
-                  ותקציב חודשי מומלץ.
+                <div style={{ fontSize: 20, lineHeight: 1.9, color: "#e2e8f0" }}>
+                  תוך כמה דקות נבנה עבורך תמונה פיננסית ראשונית:
+                  הכנסות קבועות, הוצאות קבועות, תקציב משתנה ודשבורד מוכן לעבודה.
                 </div>
 
                 <div
                   style={{
-                    background: "rgba(255,255,255,0.08)",
-                    borderRadius: 20,
-                    padding: 20,
                     display: "grid",
                     gridTemplateColumns: "repeat(3, 1fr)",
                     gap: 16,
                   }}
                 >
-                  <div>
-                    <div style={{ fontWeight: 700, fontSize: 18 }}>הכנסות קבועות</div>
+                  <div
+                    style={{
+                      background: "rgba(255,255,255,0.08)",
+                      borderRadius: 20,
+                      padding: 20,
+                    }}
+                  >
+                    <div style={{ fontWeight: 700, fontSize: 18 }}>שליטה</div>
                     <div style={{ marginTop: 8, color: "#cbd5e1", lineHeight: 1.7 }}>
-                      משכורת, שכר בן/בת זוג, קצבאות והכנסות נוספות.
+                      המערכת תבנה לך בסיס מסודר במקום להתחיל ממסך ריק.
                     </div>
                   </div>
-                  <div>
-                    <div style={{ fontWeight: 700, fontSize: 18 }}>הוצאות קבועות</div>
+
+                  <div
+                    style={{
+                      background: "rgba(255,255,255,0.08)",
+                      borderRadius: 20,
+                      padding: 20,
+                    }}
+                  >
+                    <div style={{ fontWeight: 700, fontSize: 18 }}>חיסכון בזמן</div>
                     <div style={{ marginTop: 8, color: "#cbd5e1", lineHeight: 1.7 }}>
-                      דיור, חשבונות, ביטוחים, חינוך והלוואות.
+                      משכורות, דיור וחשבונות יוגדרו אוטומטית כהוצאות והכנסות קבועות.
                     </div>
                   </div>
-                  <div>
-                    <div style={{ fontWeight: 700, fontSize: 18 }}>תקציב חכם</div>
+
+                  <div
+                    style={{
+                      background: "rgba(255,255,255,0.08)",
+                      borderRadius: 20,
+                      padding: 20,
+                    }}
+                  >
+                    <div style={{ fontWeight: 700, fontSize: 18 }}>תמונה אמיתית</div>
                     <div style={{ marginTop: 8, color: "#cbd5e1", lineHeight: 1.7 }}>
-                      המלצות פתיחה לפי גודל משק הבית, עם אפשרות לעריכה.
+                      תראה כמה באמת נשאר לך בכל חודש ואיפה הכסף הולך.
                     </div>
                   </div>
                 </div>
@@ -1004,6 +1047,7 @@ export default function App() {
                     <option>נשוי</option>
                     <option>גרוש</option>
                     <option>אלמן</option>
+                    <option>אחר</option>
                   </select>
                 </div>
 
@@ -1028,7 +1072,7 @@ export default function App() {
                 </div>
 
                 <div>
-                  <label style={{ display: "block", marginBottom: 8 }}>האם לבן/בת הזוג יש הכנסה?</label>
+                  <label style={{ display: "block", marginBottom: 8 }}>האם לבן/בת זוג יש הכנסה?</label>
                   <select
                     style={inputStyle()}
                     value={onboardingData.hasPartnerIncome}
@@ -1044,7 +1088,7 @@ export default function App() {
             {onboardingStep === 2 && (
               <div style={{ display: "grid", gap: 18, gridTemplateColumns: "1fr 1fr" }}>
                 <div>
-                  <label style={{ display: "block", marginBottom: 8 }}>שכר חודשי שלך</label>
+                  <label style={{ display: "block", marginBottom: 8 }}>שכר חודשי נטו שלך</label>
                   <input
                     style={inputStyle()}
                     type="number"
@@ -1055,7 +1099,7 @@ export default function App() {
 
                 {onboardingData.hasPartnerIncome === "כן" && (
                   <div>
-                    <label style={{ display: "block", marginBottom: 8 }}>שכר חודשי של בן/בת זוג</label>
+                    <label style={{ display: "block", marginBottom: 8 }}>שכר חודשי נטו של בן/בת זוג</label>
                     <input
                       style={inputStyle()}
                       type="number"
@@ -1076,7 +1120,7 @@ export default function App() {
                 </div>
 
                 <div>
-                  <label style={{ display: "block", marginBottom: 8 }}>באיזה תאריך נכנסת המשכורת?</label>
+                  <label style={{ display: "block", marginBottom: 8 }}>תאריך קבלת שכר עיקרי</label>
                   <select
                     style={inputStyle()}
                     value={onboardingData.salaryDay}
@@ -1134,6 +1178,66 @@ export default function App() {
             )}
 
             {onboardingStep === 4 && (
+              <div style={{ display: "grid", gap: 18, gridTemplateColumns: "1fr 1fr" }}>
+                <div>
+                  <label style={{ display: "block", marginBottom: 8 }}>יתרה נוכחית בעו"ש</label>
+                  <input
+                    style={inputStyle()}
+                    type="number"
+                    value={onboardingData.currentBalance}
+                    onChange={(e) => updateOnboardingField("currentBalance", e.target.value)}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: "block", marginBottom: 8 }}>חיסכון נזיל</label>
+                  <input
+                    style={inputStyle()}
+                    type="number"
+                    value={onboardingData.savings}
+                    onChange={(e) => updateOnboardingField("savings", e.target.value)}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: "block", marginBottom: 8 }}>מינוס נוכחי</label>
+                  <input
+                    style={inputStyle()}
+                    type="number"
+                    value={onboardingData.overdraftAmount}
+                    onChange={(e) => updateOnboardingField("overdraftAmount", e.target.value)}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: "block", marginBottom: 8 }}>המטרה הפיננסית המרכזית שלך</label>
+                  <select
+                    style={inputStyle()}
+                    value={onboardingData.mainGoal}
+                    onChange={(e) => updateOnboardingField("mainGoal", e.target.value)}
+                  >
+                    <option>להבין לאן הכסף הולך</option>
+                    <option>להקטין הוצאות</option>
+                    <option>לצאת מהמינוס</option>
+                    <option>להתחיל לחסוך</option>
+                    <option>לסגור חובות</option>
+                    <option>לבנות קרן חירום</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ display: "block", marginBottom: 8 }}>יעד חיסכון חודשי רצוי</label>
+                  <input
+                    style={inputStyle()}
+                    type="number"
+                    value={onboardingData.targetSaving}
+                    onChange={(e) => updateOnboardingField("targetSaving", e.target.value)}
+                  />
+                </div>
+              </div>
+            )}
+
+            {onboardingStep === 5 && (
               <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(3, 1fr)" }}>
                 {expenseCategories.map((categoryName) => (
                   <div
@@ -1157,7 +1261,7 @@ export default function App() {
               </div>
             )}
 
-            {onboardingStep === 5 && (
+            {onboardingStep === 6 && (
               <div style={{ display: "grid", gap: 20 }}>
                 <div
                   style={{
@@ -1172,9 +1276,9 @@ export default function App() {
                 >
                   <CheckCircle2 size={24} />
                   <div>
-                    <div style={{ fontSize: 20, fontWeight: 700 }}>המערכת שלך כמעט מוכנה</div>
+                    <div style={{ fontSize: 20, fontWeight: 700 }}>זה הסיכום הראשוני שלך</div>
                     <div style={{ marginTop: 6, color: "#dcfce7" }}>
-                      הנה הסיכום הראשוני שניצור עבורך בלחיצה אחת.
+                      בלחיצה אחת ניצור לך מערכת מוכנה עם בסיס פיננסי אמיתי.
                     </div>
                   </div>
                 </div>
@@ -1182,39 +1286,54 @@ export default function App() {
                 <div
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "1fr 1fr 1fr",
+                    gridTemplateColumns: "repeat(4, 1fr)",
                     gap: 16,
                   }}
                 >
-                  <div style={{ ...cardStyle(), background: "#ffffff", color: "#0f172a" }}>
-                    <div style={{ color: "#64748b", fontSize: 14 }}>הכנסות קבועות חודשיות</div>
+                  <div style={{ ...cardStyle(), color: "#0f172a" }}>
+                    <div style={{ color: "#64748b", fontSize: 14 }}>הכנסות קבועות</div>
                     <div style={{ fontSize: 28, fontWeight: 700, marginTop: 8 }}>
                       {formatCurrency(previewIncome)}
                     </div>
                   </div>
 
-                  <div style={{ ...cardStyle(), background: "#ffffff", color: "#0f172a" }}>
-                    <div style={{ color: "#64748b", fontSize: 14 }}>הוצאות קבועות חודשיות</div>
+                  <div style={{ ...cardStyle(), color: "#0f172a" }}>
+                    <div style={{ color: "#64748b", fontSize: 14 }}>הוצאות קבועות</div>
                     <div style={{ fontSize: 28, fontWeight: 700, marginTop: 8 }}>
-                      {formatCurrency(previewExpense)}
+                      {formatCurrency(previewFixedExpense)}
                     </div>
                   </div>
 
-                  <div style={{ ...cardStyle(), background: "#ffffff", color: "#0f172a" }}>
+                  <div style={{ ...cardStyle(), color: "#0f172a" }}>
                     <div style={{ color: "#64748b", fontSize: 14 }}>תקציב משתנה מוצע</div>
                     <div style={{ fontSize: 28, fontWeight: 700, marginTop: 8 }}>
                       {formatCurrency(previewVariableBudget)}
                     </div>
                   </div>
+
+                  <div style={{ ...cardStyle(), color: "#0f172a" }}>
+                    <div style={{ color: "#64748b", fontSize: 14 }}>יתרה חודשית צפויה</div>
+                    <div
+                      style={{
+                        fontSize: 28,
+                        fontWeight: 700,
+                        marginTop: 8,
+                        color: expectedBalance >= 0 ? "#16a34a" : "#dc2626",
+                      }}
+                    >
+                      {formatCurrency(expectedBalance)}
+                    </div>
+                  </div>
                 </div>
 
-                <div style={{ ...cardStyle(), background: "#ffffff", color: "#0f172a" }}>
+                <div style={{ ...cardStyle(), color: "#0f172a" }}>
                   <div style={{ fontWeight: 700, fontSize: 20, marginBottom: 14 }}>
                     תבניות קבועות שייווצרו
                   </div>
+
                   <div style={{ display: "grid", gap: 10 }}>
                     {summaryTemplatesPreview.length === 0 ? (
-                      <div style={{ color: "#64748b" }}>לא הוגדרו עדיין הכנסות/הוצאות קבועות.</div>
+                      <div style={{ color: "#64748b" }}>לא הוגדרו עדיין הכנסות או הוצאות קבועות.</div>
                     ) : (
                       summaryTemplatesPreview.map((tpl) => (
                         <div
@@ -1339,8 +1458,7 @@ export default function App() {
                   lineHeight: 1.8,
                 }}
               >
-                מעקב אחר הכנסות והוצאות, ניתוח קטגוריות, תזרים מזומנים חודשי
-                ודשבורד אחד שמרכז את כל מה שחשוב.
+                שליטה על הכנסות, הוצאות, תקציב חודשי ותמונה פיננסית ברורה למשק הבית.
               </p>
 
               <div style={{ marginTop: 18, maxWidth: 340 }}>
@@ -1608,7 +1726,7 @@ export default function App() {
               }}
             >
               <div style={cardStyle()}>
-                <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 20 }}>
+                <div style={sectionTitleStyle()}>
                   עסקאות אחרונות · {monthLabelFromKey(selectedMonth)}
                 </div>
 
@@ -1656,7 +1774,7 @@ export default function App() {
               </div>
 
               <div style={cardStyle()}>
-                <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 20 }}>
+                <div style={sectionTitleStyle()}>
                   חלוקת הוצאות לפי קטגוריה · {monthLabelFromKey(selectedMonth)}
                 </div>
 
@@ -1715,7 +1833,7 @@ export default function App() {
                   marginBottom: 20,
                 }}
               >
-                <div style={{ fontSize: 22, fontWeight: 700 }}>רשימת עסקאות</div>
+                <div style={sectionTitleStyle()}>רשימת עסקאות</div>
 
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                   <select
@@ -1853,7 +1971,17 @@ export default function App() {
                                     : "#92400e",
                               }}
                             >
-                              {t.recurrence === "fixed" ? "קבועה" : "משתנה"}
+                              {t.recurrence === "fixed" ? (
+                                <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                                  <Repeat size={12} />
+                                  קבועה
+                                </span>
+                              ) : (
+                                <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                                  <Shuffle size={12} />
+                                  משתנה
+                                </span>
+                              )}
                             </span>
                             {t.sourceType === "template" && (
                               <span
@@ -2020,8 +2148,7 @@ export default function App() {
                       lineHeight: 1.7,
                     }}
                   >
-                    עסקה קבועה נשמרת כתבנית חודשית. המערכת תיצור אותה אוטומטית
-                    לכל חודש עתידי לפי תאריך ההתחלה.
+                    עסקה קבועה נשמרת כתבנית חודשית. המערכת תיצור אותה אוטומטית לכל חודש עתידי לפי תאריך ההתחלה.
                   </div>
                 )}
 
@@ -2084,9 +2211,7 @@ export default function App() {
                   marginBottom: 20,
                 }}
               >
-                <div style={{ fontSize: 22, fontWeight: 700 }}>
-                  ניהול תקציב חודשי לפי קטגוריה
-                </div>
+                <div style={sectionTitleStyle()}>ניהול תקציב חודשי לפי קטגוריה</div>
                 <button style={buttonStyle("outline")} onClick={resetBudgets}>
                   אפס תקציבים לברירת מחדל
                 </button>
