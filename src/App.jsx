@@ -6,13 +6,14 @@ import {
   ReceiptText,
   Repeat,
   Shuffle,
-  Sparkles,
   Pencil,
   Trash2,
   Download,
   FileText,
   TrendingUp,
   PieChart as PieChartIcon,
+  ChevronRight,
+  ChevronLeft,
 } from "lucide-react";
 import {
   PieChart,
@@ -91,9 +92,9 @@ const initialRecurringTemplates = [
     type: "income",
     title: "משכורת חודשית",
     category: "משכורת",
-    amount: 12500,
-    startDate: "2026-04-02",
-    dayOfMonth: 2,
+    amount: 12000,
+    startDate: "2026-04-01",
+    dayOfMonth: 1,
     recurrence: "fixed",
   },
   {
@@ -120,8 +121,8 @@ const defaultBudgets = {
   אחר: 1000,
 };
 
-const STORAGE_KEY = "financial-platform-hebrew-data-v2";
-const USER_STORAGE_KEY = "financial-platform-user-v2";
+const STORAGE_KEY = "financial-platform-hebrew-data-v4";
+const USER_STORAGE_KEY = "financial-platform-user-v4";
 
 const chartColors = [
   "#2563eb",
@@ -152,22 +153,27 @@ function monthKey(dateString) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
-function monthLabel(dateString) {
-  const d = new Date(dateString);
+function currentMonthKey() {
+  return monthKey(new Date().toISOString().slice(0, 10));
+}
+
+function monthLabelFromKey(key) {
+  const [year, month] = key.split("-").map(Number);
+  const d = new Date(year, month - 1, 1);
   return new Intl.DateTimeFormat("he-IL", {
-    month: "short",
+    month: "long",
     year: "numeric",
   }).format(d);
 }
 
-function startOfMonth(dateLike) {
-  const d = new Date(dateLike);
-  return new Date(d.getFullYear(), d.getMonth(), 1);
+function addMonthsToKey(key, delta) {
+  const [year, month] = key.split("-").map(Number);
+  const d = new Date(year, month - 1 + delta, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
-function addMonths(dateLike, months) {
-  const d = new Date(dateLike);
-  return new Date(d.getFullYear(), d.getMonth() + months, 1);
+function monthLabel(dateString) {
+  return monthLabelFromKey(monthKey(dateString));
 }
 
 function toISODate(dateObj) {
@@ -181,27 +187,31 @@ function safeDay(year, monthIndex, day) {
 
 function generateRecurringOccurrences(templates, monthsBack = 12, monthsForward = 24) {
   const now = new Date();
-  const rangeStart = addMonths(startOfMonth(now), -monthsBack);
-  const rangeEnd = addMonths(startOfMonth(now), monthsForward);
-
+  const start = new Date(now.getFullYear(), now.getMonth() - monthsBack, 1);
+  const end = new Date(now.getFullYear(), now.getMonth() + monthsForward, 1);
   const generated = [];
 
   templates.forEach((template) => {
-    const start = startOfMonth(template.startDate);
-    const iterationStart = start > rangeStart ? start : rangeStart;
+    const startDate = new Date(template.startDate);
+    const templateMonthStart = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
 
     for (
-      let cursor = new Date(iterationStart);
-      cursor <= rangeEnd;
-      cursor = addMonths(cursor, 1)
+      let cursor = new Date(start);
+      cursor <= end;
+      cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1)
     ) {
-      if (cursor < start) continue;
+      if (cursor < templateMonthStart) continue;
 
       const year = cursor.getFullYear();
       const month = cursor.getMonth();
-      const day = safeDay(year, month, template.dayOfMonth || new Date(template.startDate).getDate());
+      const day = safeDay(
+        year,
+        month,
+        template.dayOfMonth || new Date(template.startDate).getDate()
+      );
 
       const occurrenceDate = new Date(year, month, day);
+
       generated.push({
         id: `${template.id}-${year}-${String(month + 1).padStart(2, "0")}`,
         templateId: template.id,
@@ -237,6 +247,9 @@ function buttonStyle(kind = "primary") {
     cursor: "pointer",
     fontSize: 14,
     fontWeight: 600,
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
   };
 
   if (kind === "outline") {
@@ -372,6 +385,8 @@ export default function App() {
     }
   });
 
+  const [selectedMonth, setSelectedMonth] = useState(currentMonthKey());
+
   const [type, setType] = useState("expense");
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState(expenseCategories[0]);
@@ -383,7 +398,7 @@ export default function App() {
   const [editingTemplateId, setEditingTemplateId] = useState(null);
 
   const [filterType, setFilterType] = useState("all");
-  const [filterMonth, setFilterMonth] = useState("all");
+  const [filterMonth, setFilterMonth] = useState(currentMonthKey());
   const [filterRecurrence, setFilterRecurrence] = useState("all");
 
   const [userEmail, setUserEmail] = useState("");
@@ -427,31 +442,34 @@ export default function App() {
       ...t,
       sourceType: "manual",
     }));
-
     return [...manual, ...generatedRecurringTransactions];
   }, [transactions, generatedRecurringTransactions]);
 
   const monthOptions = useMemo(() => {
-    const keys = Array.from(
-      new Set(allVisibleTransactions.map((t) => monthKey(t.date)))
-    )
+    const keys = Array.from(new Set(allVisibleTransactions.map((t) => monthKey(t.date))))
       .sort()
       .reverse();
 
-    return keys.map((key) => {
-      const sample = allVisibleTransactions.find((t) => monthKey(t.date) === key);
-      return {
-        key,
-        label: sample ? monthLabel(sample.date) : key,
-      };
-    });
+    return keys.map((key) => ({
+      key,
+      label: monthLabelFromKey(key),
+    }));
   }, [allVisibleTransactions]);
+
+  useEffect(() => {
+    if (!monthOptions.length) return;
+    const exists = monthOptions.some((m) => m.key === selectedMonth);
+    if (!exists) setSelectedMonth(monthOptions[0].key);
+  }, [monthOptions, selectedMonth]);
+
+  const dashboardTransactions = useMemo(() => {
+    return allVisibleTransactions.filter((t) => monthKey(t.date) === selectedMonth);
+  }, [allVisibleTransactions, selectedMonth]);
 
   const filteredTransactions = useMemo(() => {
     return allVisibleTransactions.filter((t) => {
       const typeMatch = filterType === "all" || t.type === filterType;
-      const monthMatch =
-        filterMonth === "all" || monthKey(t.date) === filterMonth;
+      const monthMatch = filterMonth === "all" || monthKey(t.date) === filterMonth;
       const recurrenceMatch =
         filterRecurrence === "all" || t.recurrence === filterRecurrence;
       return typeMatch && monthMatch && recurrenceMatch;
@@ -459,11 +477,11 @@ export default function App() {
   }, [allVisibleTransactions, filterType, filterMonth, filterRecurrence]);
 
   const summary = useMemo(() => {
-    const income = filteredTransactions
+    const income = dashboardTransactions
       .filter((t) => t.type === "income")
       .reduce((sum, t) => sum + t.amount, 0);
 
-    const expense = filteredTransactions
+    const expense = dashboardTransactions
       .filter((t) => t.type === "expense")
       .reduce((sum, t) => sum + t.amount, 0);
 
@@ -471,20 +489,20 @@ export default function App() {
       income,
       expense,
       balance: income - expense,
-      count: filteredTransactions.length,
+      count: dashboardTransactions.length,
     };
-  }, [filteredTransactions]);
+  }, [dashboardTransactions]);
 
   const expenseByCategory = useMemo(() => {
     const map = new Map();
-    filteredTransactions
+    dashboardTransactions
       .filter((t) => t.type === "expense")
       .forEach((t) => {
         map.set(t.category, (map.get(t.category) || 0) + t.amount);
       });
 
     return Array.from(map.entries()).map(([name, value]) => ({ name, value }));
-  }, [filteredTransactions]);
+  }, [dashboardTransactions]);
 
   const monthlyData = useMemo(() => {
     const grouped = new Map();
@@ -509,7 +527,7 @@ export default function App() {
 
   const budgetStatus = useMemo(() => {
     return expenseCategories.map((categoryName) => {
-      const spent = filteredTransactions
+      const spent = dashboardTransactions
         .filter((t) => t.type === "expense" && t.category === categoryName)
         .reduce((sum, t) => sum + t.amount, 0);
 
@@ -525,11 +543,32 @@ export default function App() {
         overBudget: budget > 0 && spent > budget,
       };
     });
-  }, [filteredTransactions, budgets]);
+  }, [dashboardTransactions, budgets]);
 
-  const latestTransactions = [...filteredTransactions]
+  const latestTransactions = [...dashboardTransactions]
     .sort((a, b) => new Date(b.date) - new Date(a.date))
     .slice(0, 8);
+
+  const averageIncome = useMemo(() => {
+    const rows = dashboardTransactions.filter((t) => t.type === "income");
+    return rows.length
+      ? rows.reduce((sum, t) => sum + t.amount, 0) / rows.length
+      : 0;
+  }, [dashboardTransactions]);
+
+  const averageExpense = useMemo(() => {
+    const rows = dashboardTransactions.filter((t) => t.type === "expense");
+    return rows.length
+      ? rows.reduce((sum, t) => sum + t.amount, 0) / rows.length
+      : 0;
+  }, [dashboardTransactions]);
+
+  const topExpenseCategory = useMemo(() => {
+    if (!expenseByCategory.length) return "אין עדיין נתונים";
+    return [...expenseByCategory].sort((a, b) => b.value - a.value)[0].name;
+  }, [expenseByCategory]);
+
+  const activeOverBudgetCount = budgetStatus.filter((item) => item.overBudget).length;
 
   function resetForm() {
     setEditingTransactionId(null);
@@ -676,8 +715,9 @@ export default function App() {
     setTransactions(initialManualTransactions);
     setRecurringTemplates(initialRecurringTemplates);
     setBudgets(defaultBudgets);
+    setSelectedMonth(currentMonthKey());
     setFilterType("all");
-    setFilterMonth("all");
+    setFilterMonth(currentMonthKey());
     setFilterRecurrence("all");
     resetForm();
   }
@@ -718,11 +758,6 @@ export default function App() {
 
   function printMonthlyReport() {
     window.print();
-  }
-
-  function jumpToCurrentMonth() {
-    const now = new Date();
-    setFilterMonth(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
   }
 
   const tabs = [
@@ -787,6 +822,44 @@ export default function App() {
                 מעקב אחר הכנסות והוצאות, ניתוח קטגוריות, תזרים מזומנים חודשי
                 ודשבורד אחד שמרכז את כל מה שחשוב.
               </p>
+
+              <div style={{ marginTop: 18, maxWidth: 320 }}>
+                <div style={{ fontSize: 13, color: "#cbd5e1", marginBottom: 8 }}>
+                  חודש פעיל בדשבורד
+                </div>
+
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <button
+                    style={buttonStyle("outline")}
+                    onClick={() => setSelectedMonth((prev) => addMonthsToKey(prev, -1))}
+                  >
+                    <ChevronRight size={16} />
+                  </button>
+
+                  <select
+                    style={{
+                      ...inputStyle(),
+                      background: "rgba(255,255,255,0.95)",
+                      color: "#0f172a",
+                    }}
+                    value={selectedMonth}
+                    onChange={(e) => setSelectedMonth(e.target.value)}
+                  >
+                    {monthOptions.map((m) => (
+                      <option key={m.key} value={m.key}>
+                        {m.label}
+                      </option>
+                    ))}
+                  </select>
+
+                  <button
+                    style={buttonStyle("outline")}
+                    onClick={() => setSelectedMonth((prev) => addMonthsToKey(prev, 1))}
+                  >
+                    <ChevronLeft size={16} />
+                  </button>
+                </div>
+              </div>
             </div>
 
             <div
@@ -805,7 +878,7 @@ export default function App() {
                   justifyContent: "space-between",
                 }}
               >
-                <span>יתרה נוכחית</span>
+                <span>יתרה לחודש {monthLabelFromKey(selectedMonth)}</span>
                 <strong style={{ fontSize: 24 }}>
                   {formatCurrency(summary.balance)}
                 </strong>
@@ -826,7 +899,7 @@ export default function App() {
                     padding: 16,
                   }}
                 >
-                  <div style={{ fontSize: 12, color: "#cbd5e1" }}>הכנסות</div>
+                  <div style={{ fontSize: 12, color: "#cbd5e1" }}>הכנסות חודשיות</div>
                   <div style={{ marginTop: 8, fontSize: 20, fontWeight: 700 }}>
                     {formatCurrency(summary.income)}
                   </div>
@@ -838,7 +911,7 @@ export default function App() {
                     padding: 16,
                   }}
                 >
-                  <div style={{ fontSize: 12, color: "#cbd5e1" }}>הוצאות</div>
+                  <div style={{ fontSize: 12, color: "#cbd5e1" }}>הוצאות חודשיות</div>
                   <div style={{ marginTop: 8, fontSize: 20, fontWeight: 700 }}>
                     {formatCurrency(summary.expense)}
                   </div>
@@ -950,6 +1023,30 @@ export default function App() {
           <div style={{ display: "grid", gap: 24 }}>
             <div
               style={{
+                background: "#fff",
+                borderRadius: 18,
+                padding: 16,
+                border: "1px solid #e2e8f0",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: 16,
+                flexWrap: "wrap",
+              }}
+            >
+              <div>
+                <div style={{ fontSize: 14, color: "#64748b" }}>תצוגת דשבורד</div>
+                <div style={{ fontSize: 22, fontWeight: 700, marginTop: 4 }}>
+                  {monthLabelFromKey(selectedMonth)}
+                </div>
+              </div>
+              <div style={{ color: "#64748b", fontSize: 14 }}>
+                כל הכרטיסים, התקציבים והעסקאות האחרונות מחושבים רק עבור החודש הזה.
+              </div>
+            </div>
+
+            <div
+              style={{
                 display: "grid",
                 gridTemplateColumns: "repeat(4, 1fr)",
                 gap: 16,
@@ -958,14 +1055,14 @@ export default function App() {
               <SummaryCard
                 title="סך הכנסות"
                 value={formatCurrency(summary.income)}
-                subtitle="לפי הסינון הנוכחי"
+                subtitle={`לחודש ${monthLabelFromKey(selectedMonth)}`}
                 icon={<ArrowUpCircle size={24} />}
                 color="#16a34a"
               />
               <SummaryCard
                 title="סך הוצאות"
                 value={formatCurrency(summary.expense)}
-                subtitle="לפי הסינון הנוכחי"
+                subtitle={`לחודש ${monthLabelFromKey(selectedMonth)}`}
                 icon={<ArrowDownCircle size={24} />}
                 color="#dc2626"
               />
@@ -978,7 +1075,7 @@ export default function App() {
               <SummaryCard
                 title="מספר עסקאות"
                 value={String(summary.count)}
-                subtitle="רשומות פעילות במערכת"
+                subtitle="רשומות בחודש הפעיל"
                 icon={<ReceiptText size={24} />}
               />
             </div>
@@ -992,13 +1089,13 @@ export default function App() {
             >
               <div style={cardStyle()}>
                 <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 20 }}>
-                  עסקאות אחרונות
+                  עסקאות אחרונות · {monthLabelFromKey(selectedMonth)}
                 </div>
 
                 {latestTransactions.length === 0 ? (
                   <EmptyState
-                    title="אין עדיין עסקאות להצגה"
-                    text="הוסף עסקה חדשה כדי להתחיל לנהל את הכספים שלך."
+                    title="אין עסקאות בחודש הזה"
+                    text="נסה לעבור לחודש אחר או להוסיף עסקה חדשה."
                   />
                 ) : (
                   <div style={{ display: "grid", gap: 12 }}>
@@ -1040,14 +1137,14 @@ export default function App() {
 
               <div style={cardStyle()}>
                 <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 20 }}>
-                  חלוקת הוצאות לפי קטגוריה
+                  חלוקת הוצאות לפי קטגוריה · {monthLabelFromKey(selectedMonth)}
                 </div>
 
                 <div style={{ width: "100%", height: 360 }}>
                   {expenseByCategory.length === 0 ? (
                     <EmptyState
-                      title="אין נתוני הוצאות"
-                      text="כשתוסיף הוצאות, כאן תופיע התפלגות לפי קטגוריה."
+                      title="אין הוצאות בחודש הזה"
+                      text="כשתהיינה הוצאות בחודש הפעיל, כאן תופיע התפלגות."
                     />
                   ) : (
                     <ResponsiveContainer width="100%" height="100%">
@@ -1137,18 +1234,21 @@ export default function App() {
               </div>
 
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 18 }}>
-                <button style={buttonStyle("outline")} onClick={jumpToCurrentMonth}>
-                  <FileText size={16} style={{ marginLeft: 6 }} />
+                <button
+                  style={buttonStyle("outline")}
+                  onClick={() => setFilterMonth(currentMonthKey())}
+                >
+                  <FileText size={16} />
                   עבור לחודש נוכחי
                 </button>
 
                 <button style={buttonStyle("outline")} onClick={exportToCSV}>
-                  <Download size={16} style={{ marginLeft: 6 }} />
+                  <Download size={16} />
                   ייצוא ל-CSV
                 </button>
 
                 <button style={buttonStyle("outline")} onClick={printMonthlyReport}>
-                  <FileText size={16} style={{ marginLeft: 6 }} />
+                  <FileText size={16} />
                   דוח חודשי להדפסה
                 </button>
 
@@ -1429,6 +1529,30 @@ export default function App() {
 
         {activeTab === "reports" && (
           <div style={{ display: "grid", gap: 24 }}>
+            <div
+              style={{
+                background: "#fff",
+                borderRadius: 18,
+                padding: 16,
+                border: "1px solid #e2e8f0",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: 16,
+                flexWrap: "wrap",
+              }}
+            >
+              <div>
+                <div style={{ fontSize: 14, color: "#64748b" }}>חודש פעיל בדוחות</div>
+                <div style={{ fontSize: 22, fontWeight: 700, marginTop: 4 }}>
+                  {monthLabelFromKey(selectedMonth)}
+                </div>
+              </div>
+              <div style={{ color: "#64748b", fontSize: 14 }}>
+                התקציבים והתובנות מחושבים לפי החודש הפעיל בדשבורד.
+              </div>
+            </div>
+
             <div style={cardStyle()}>
               <div
                 style={{
@@ -1633,7 +1757,9 @@ export default function App() {
                     marginBottom: 16,
                   }}
                 >
-                  <div style={{ color: "#64748b", fontSize: 14 }}>היתרה הנוכחית</div>
+                  <div style={{ color: "#64748b", fontSize: 14 }}>
+                    היתרה בחודש {monthLabelFromKey(selectedMonth)}
+                  </div>
                   <div style={{ marginTop: 8, fontSize: 32, fontWeight: 700 }}>
                     {formatCurrency(summary.balance)}
                   </div>
@@ -1658,16 +1784,7 @@ export default function App() {
                         color: "#166534",
                       }}
                     >
-                      {formatCurrency(
-                        (() => {
-                          const rows = filteredTransactions.filter(
-                            (t) => t.type === "income"
-                          );
-                          return rows.length
-                            ? rows.reduce((sum, t) => sum + t.amount, 0) / rows.length
-                            : 0;
-                        })()
-                      )}
+                      {formatCurrency(averageIncome)}
                     </div>
                   </div>
 
@@ -1689,16 +1806,7 @@ export default function App() {
                         color: "#991b1b",
                       }}
                     >
-                      {formatCurrency(
-                        (() => {
-                          const rows = filteredTransactions.filter(
-                            (t) => t.type === "expense"
-                          );
-                          return rows.length
-                            ? rows.reduce((sum, t) => sum + t.amount, 0) / rows.length
-                            : 0;
-                        })()
-                      )}
+                      {formatCurrency(averageExpense)}
                     </div>
                   </div>
                 </div>
@@ -1708,10 +1816,7 @@ export default function App() {
                     הקטגוריה המובילה בהוצאות
                   </div>
                   <div style={{ marginTop: 8, fontSize: 24, fontWeight: 700 }}>
-                    {expenseByCategory.length
-                      ? [...expenseByCategory].sort((a, b) => b.value - a.value)[0]
-                          .name
-                      : "אין עדיין נתונים"}
+                    {topExpenseCategory}
                   </div>
                 </div>
 
@@ -1720,14 +1825,12 @@ export default function App() {
                     חריגות תקציב פעילות
                   </div>
                   <div style={{ marginTop: 8, fontSize: 24, fontWeight: 700 }}>
-                    {budgetStatus.filter((item) => item.overBudget).length}
+                    {activeOverBudgetCount}
                   </div>
                   <div style={{ marginTop: 8, color: "#64748b", fontSize: 14 }}>
-                    {budgetStatus.filter((item) => item.overBudget).length
-                      ? `יש כרגע חריגה ב-${
-                          budgetStatus.filter((item) => item.overBudget).length
-                        } קטגוריות.`
-                      : "אין כרגע חריגות תקציב לפי הסינון הנוכחי."}
+                    {activeOverBudgetCount
+                      ? `יש כרגע חריגה ב-${activeOverBudgetCount} קטגוריות בחודש הפעיל.`
+                      : "אין כרגע חריגות תקציב בחודש הפעיל."}
                   </div>
                 </div>
 
@@ -1741,8 +1844,12 @@ export default function App() {
                     }}
                   >
                     {summary.balance >= 0
-                      ? "המצב הכספי הנוכחי חיובי. ניתן להמשיך לעקוב אחר דפוסי ההוצאות ולזהות הזדמנויות לחיסכון נוסף."
-                      : "כרגע ההוצאות גבוהות מההכנסות במסגרת הסינון הנוכחי. מומלץ לבדוק אילו קטגוריות מכבידות ביותר."}
+                      ? `המצב הכספי ב-${monthLabelFromKey(
+                          selectedMonth
+                        )} חיובי. ניתן לעקוב אחרי ההוצאות ולזהות הזדמנויות לחיסכון נוסף.`
+                      : `ב-${monthLabelFromKey(
+                          selectedMonth
+                        )} ההוצאות גבוהות מההכנסות. מומלץ לבדוק אילו קטגוריות מכבידות ביותר.`}
                   </div>
                 </div>
               </div>
