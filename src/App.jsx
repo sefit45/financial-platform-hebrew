@@ -14,6 +14,7 @@ import {
   PieChart as PieChartIcon,
   ChevronRight,
   ChevronLeft,
+  CheckCircle2,
 } from "lucide-react";
 import {
   PieChart,
@@ -29,7 +30,7 @@ import {
   Legend,
 } from "recharts";
 
-const incomeCategories = ["משכורת", "עסק", "השקעות", "החזר", "אחר"];
+const incomeCategories = ["משכורת", "עסק", "השקעות", "קצבה", "אחר"];
 const expenseCategories = [
   "מזון",
   "דיור",
@@ -66,48 +67,9 @@ const initialManualTransactions = [
     date: "2026-04-08",
     recurrence: "variable",
   },
-  {
-    id: 5,
-    type: "expense",
-    title: "דלק ורכב",
-    category: "תחבורה",
-    amount: 540,
-    date: "2026-04-11",
-    recurrence: "variable",
-  },
-  {
-    id: 6,
-    type: "expense",
-    title: "מסעדה",
-    category: "בילויים",
-    amount: 290,
-    date: "2026-04-13",
-    recurrence: "variable",
-  },
 ];
 
-const initialRecurringTemplates = [
-  {
-    id: "tpl-salary",
-    type: "income",
-    title: "משכורת חודשית",
-    category: "משכורת",
-    amount: 12000,
-    startDate: "2026-04-01",
-    dayOfMonth: 1,
-    recurrence: "fixed",
-  },
-  {
-    id: "tpl-rent",
-    type: "expense",
-    title: "שכר דירה",
-    category: "דיור",
-    amount: 4200,
-    startDate: "2026-04-05",
-    dayOfMonth: 5,
-    recurrence: "fixed",
-  },
-];
+const initialRecurringTemplates = [];
 
 const defaultBudgets = {
   מזון: 2500,
@@ -121,8 +83,8 @@ const defaultBudgets = {
   אחר: 1000,
 };
 
-const STORAGE_KEY = "financial-platform-hebrew-data-v4";
-const USER_STORAGE_KEY = "financial-platform-user-v4";
+const STORAGE_KEY = "financial-platform-hebrew-data-v5";
+const USER_STORAGE_KEY = "financial-platform-user-v5";
 
 const chartColors = [
   "#2563eb",
@@ -166,14 +128,14 @@ function monthLabelFromKey(key) {
   }).format(d);
 }
 
+function monthLabel(dateString) {
+  return monthLabelFromKey(monthKey(dateString));
+}
+
 function addMonthsToKey(key, delta) {
   const [year, month] = key.split("-").map(Number);
   const d = new Date(year, month - 1 + delta, 1);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-}
-
-function monthLabel(dateString) {
-  return monthLabelFromKey(monthKey(dateString));
 }
 
 function toISODate(dateObj) {
@@ -229,6 +191,22 @@ function generateRecurringOccurrences(templates, monthsBack = 12, monthsForward 
   return generated;
 }
 
+function estimateBudgetsFromHousehold(size, kids) {
+  const household = Number(size) || 1;
+  const children = Number(kids) || 0;
+  return {
+    מזון: Math.round(1400 + household * 450 + children * 250),
+    דיור: 4500,
+    תחבורה: Math.round(700 + household * 180),
+    בילויים: Math.round(500 + household * 170),
+    חשבונות: Math.round(900 + household * 160),
+    בריאות: Math.round(350 + household * 100),
+    חינוך: Math.round(children * 700),
+    קניות: Math.round(700 + household * 200),
+    אחר: 800,
+  };
+}
+
 function cardStyle() {
   return {
     background: "#fff",
@@ -265,6 +243,14 @@ function buttonStyle(kind = "primary") {
     return {
       ...common,
       background: "#dc2626",
+      color: "#fff",
+    };
+  }
+
+  if (kind === "success") {
+    return {
+      ...common,
+      background: "#16a34a",
       color: "#fff",
     };
   }
@@ -385,6 +371,17 @@ export default function App() {
     }
   });
 
+  const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (!saved) return false;
+      const parsed = JSON.parse(saved);
+      return Boolean(parsed.hasCompletedOnboarding);
+    } catch {
+      return false;
+    }
+  });
+
   const [selectedMonth, setSelectedMonth] = useState(currentMonthKey());
 
   const [type, setType] = useState("expense");
@@ -411,6 +408,28 @@ export default function App() {
     }
   });
 
+  const [onboardingStep, setOnboardingStep] = useState(0);
+  const [onboardingData, setOnboardingData] = useState({
+    maritalStatus: "רווק",
+    householdSize: 1,
+    childrenCount: 0,
+    hasPartnerIncome: "לא",
+    mySalary: "",
+    partnerSalary: "",
+    otherIncome: "",
+    salaryDay: "1",
+    housingCost: "",
+    arnona: "",
+    electricity: "",
+    water: "",
+    internetPhone: "",
+    carTransportFixed: "",
+    loans: "",
+    educationFixed: "",
+    insurance: "",
+    suggestedBudgets: estimateBudgetsFromHousehold(1, 0),
+  });
+
   useEffect(() => {
     localStorage.setItem(
       STORAGE_KEY,
@@ -418,9 +437,10 @@ export default function App() {
         transactions,
         recurringTemplates,
         budgets,
+        hasCompletedOnboarding,
       })
     );
-  }, [transactions, recurringTemplates, budgets]);
+  }, [transactions, recurringTemplates, budgets, hasCompletedOnboarding]);
 
   useEffect(() => {
     if (loggedInUser) {
@@ -429,6 +449,21 @@ export default function App() {
       localStorage.removeItem(USER_STORAGE_KEY);
     }
   }, [loggedInUser]);
+
+  useEffect(() => {
+    const suggested = estimateBudgetsFromHousehold(
+      onboardingData.householdSize,
+      onboardingData.childrenCount
+    );
+    setOnboardingData((prev) => ({
+      ...prev,
+      suggestedBudgets: {
+        ...suggested,
+        דיור:
+          Number(prev.housingCost) > 0 ? Number(prev.housingCost) : suggested.דיור,
+      },
+    }));
+  }, [onboardingData.householdSize, onboardingData.childrenCount, onboardingData.housingCost]);
 
   const availableCategories =
     type === "income" ? incomeCategories : expenseCategories;
@@ -569,6 +604,83 @@ export default function App() {
   }, [expenseByCategory]);
 
   const activeOverBudgetCount = budgetStatus.filter((item) => item.overBudget).length;
+
+  function updateOnboardingField(field, value) {
+    setOnboardingData((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  }
+
+  function updateSuggestedBudget(categoryName, value) {
+    setOnboardingData((prev) => ({
+      ...prev,
+      suggestedBudgets: {
+        ...prev.suggestedBudgets,
+        [categoryName]: Number(value) || 0,
+      },
+    }));
+  }
+
+  function buildRecurringTemplatesFromOnboarding(data) {
+    const templates = [];
+    const startDate = new Date();
+    const selectedSalaryDay = Number(data.salaryDay) || 1;
+
+    function addTemplateIfPositive(type, title, category, amount, dayOfMonth) {
+      const numericAmount = Number(amount) || 0;
+      if (numericAmount <= 0) return;
+
+      const year = startDate.getFullYear();
+      const month = startDate.getMonth();
+      const dateObj = new Date(year, month, safeDay(year, month, dayOfMonth));
+
+      templates.push({
+        id: `tpl-${title}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        type,
+        title,
+        category,
+        amount: numericAmount,
+        startDate: toISODate(dateObj),
+        dayOfMonth,
+        recurrence: "fixed",
+      });
+    }
+
+    addTemplateIfPositive("income", "משכורת חודשית", "משכורת", data.mySalary, selectedSalaryDay);
+
+    if (data.hasPartnerIncome === "כן") {
+      addTemplateIfPositive(
+        "income",
+        "משכורת בן/בת זוג",
+        "משכורת",
+        data.partnerSalary,
+        selectedSalaryDay
+      );
+    }
+
+    addTemplateIfPositive("income", "הכנסה נוספת", "אחר", data.otherIncome, selectedSalaryDay);
+    addTemplateIfPositive("expense", "שכר דירה / משכנתא", "דיור", data.housingCost, 5);
+    addTemplateIfPositive("expense", "ארנונה", "חשבונות", data.arnona, 10);
+    addTemplateIfPositive("expense", "חשמל", "חשבונות", data.electricity, 12);
+    addTemplateIfPositive("expense", "מים", "חשבונות", data.water, 14);
+    addTemplateIfPositive("expense", "אינטרנט וסלולר", "חשבונות", data.internetPhone, 15);
+    addTemplateIfPositive("expense", "רכב ותחבורה קבועה", "תחבורה", data.carTransportFixed, 8);
+    addTemplateIfPositive("expense", "הלוואות", "אחר", data.loans, 3);
+    addTemplateIfPositive("expense", "חינוך קבוע", "חינוך", data.educationFixed, 2);
+    addTemplateIfPositive("expense", "ביטוחים", "בריאות", data.insurance, 7);
+
+    return templates;
+  }
+
+  function finishOnboarding() {
+    const templates = buildRecurringTemplatesFromOnboarding(onboardingData);
+    setRecurringTemplates(templates);
+    setBudgets(onboardingData.suggestedBudgets);
+    setHasCompletedOnboarding(true);
+    setSelectedMonth(currentMonthKey());
+    setFilterMonth(currentMonthKey());
+  }
 
   function resetForm() {
     setEditingTransactionId(null);
@@ -715,10 +827,12 @@ export default function App() {
     setTransactions(initialManualTransactions);
     setRecurringTemplates(initialRecurringTemplates);
     setBudgets(defaultBudgets);
+    setHasCompletedOnboarding(false);
     setSelectedMonth(currentMonthKey());
     setFilterType("all");
     setFilterMonth(currentMonthKey());
     setFilterRecurrence("all");
+    setOnboardingStep(0);
     resetForm();
   }
 
@@ -765,6 +879,412 @@ export default function App() {
     { key: "transactions", label: "עסקאות" },
     { key: "reports", label: "דוחות" },
   ];
+
+  if (!hasCompletedOnboarding) {
+    const steps = [
+      "ברוכים הבאים",
+      "משק בית",
+      "הכנסות",
+      "הוצאות קבועות",
+      "תקציב משתנה",
+      "סיכום",
+    ];
+
+    const summaryTemplatesPreview = buildRecurringTemplatesFromOnboarding(onboardingData);
+    const previewIncome = summaryTemplatesPreview
+      .filter((t) => t.type === "income")
+      .reduce((sum, t) => sum + t.amount, 0);
+    const previewExpense = summaryTemplatesPreview
+      .filter((t) => t.type === "expense")
+      .reduce((sum, t) => sum + t.amount, 0);
+    const previewVariableBudget = Object.values(onboardingData.suggestedBudgets).reduce(
+      (sum, value) => sum + Number(value || 0),
+      0
+    );
+
+    return (
+      <div
+        dir="rtl"
+        style={{
+          minHeight: "100vh",
+          background:
+            "linear-gradient(135deg, #0f172a 0%, #1e293b 55%, #1d4ed8 100%)",
+          color: "#fff",
+          fontFamily: "Arial, Helvetica, sans-serif",
+          padding: 24,
+        }}
+      >
+        <div style={{ maxWidth: 980, margin: "0 auto" }}>
+          <div
+            style={{
+              background: "rgba(255,255,255,0.08)",
+              border: "1px solid rgba(255,255,255,0.15)",
+              borderRadius: 28,
+              padding: 28,
+              backdropFilter: "blur(10px)",
+              boxShadow: "0 20px 50px rgba(0,0,0,0.2)",
+            }}
+          >
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ fontSize: 14, color: "#cbd5e1" }}>
+                שלב {onboardingStep + 1} מתוך {steps.length}
+              </div>
+              <div style={{ marginTop: 8, fontSize: 34, fontWeight: 700 }}>
+                {steps[onboardingStep]}
+              </div>
+              <div
+                style={{
+                  marginTop: 14,
+                  height: 8,
+                  background: "rgba(255,255,255,0.12)",
+                  borderRadius: 999,
+                  overflow: "hidden",
+                }}
+              >
+                <div
+                  style={{
+                    height: "100%",
+                    width: `${((onboardingStep + 1) / steps.length) * 100}%`,
+                    background: "#22c55e",
+                  }}
+                />
+              </div>
+            </div>
+
+            {onboardingStep === 0 && (
+              <div style={{ display: "grid", gap: 20 }}>
+                <div style={{ fontSize: 20, lineHeight: 1.8, color: "#e2e8f0" }}>
+                  בוא נגדיר יחד את המערכת שלך תוך 2–3 דקות. בסיום,
+                  הדשבורד שלך יגיע מוכן עם הכנסות קבועות, הוצאות קבועות
+                  ותקציב חודשי מומלץ.
+                </div>
+
+                <div
+                  style={{
+                    background: "rgba(255,255,255,0.08)",
+                    borderRadius: 20,
+                    padding: 20,
+                    display: "grid",
+                    gridTemplateColumns: "repeat(3, 1fr)",
+                    gap: 16,
+                  }}
+                >
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 18 }}>הכנסות קבועות</div>
+                    <div style={{ marginTop: 8, color: "#cbd5e1", lineHeight: 1.7 }}>
+                      משכורת, שכר בן/בת זוג, קצבאות והכנסות נוספות.
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 18 }}>הוצאות קבועות</div>
+                    <div style={{ marginTop: 8, color: "#cbd5e1", lineHeight: 1.7 }}>
+                      דיור, חשבונות, ביטוחים, חינוך והלוואות.
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 18 }}>תקציב חכם</div>
+                    <div style={{ marginTop: 8, color: "#cbd5e1", lineHeight: 1.7 }}>
+                      המלצות פתיחה לפי גודל משק הבית, עם אפשרות לעריכה.
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {onboardingStep === 1 && (
+              <div style={{ display: "grid", gap: 18, gridTemplateColumns: "1fr 1fr" }}>
+                <div>
+                  <label style={{ display: "block", marginBottom: 8 }}>מצב משפחתי</label>
+                  <select
+                    style={inputStyle()}
+                    value={onboardingData.maritalStatus}
+                    onChange={(e) => updateOnboardingField("maritalStatus", e.target.value)}
+                  >
+                    <option>רווק</option>
+                    <option>נשוי</option>
+                    <option>גרוש</option>
+                    <option>אלמן</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ display: "block", marginBottom: 8 }}>מספר נפשות במשק הבית</label>
+                  <input
+                    style={inputStyle()}
+                    type="number"
+                    value={onboardingData.householdSize}
+                    onChange={(e) => updateOnboardingField("householdSize", e.target.value)}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: "block", marginBottom: 8 }}>מספר ילדים</label>
+                  <input
+                    style={inputStyle()}
+                    type="number"
+                    value={onboardingData.childrenCount}
+                    onChange={(e) => updateOnboardingField("childrenCount", e.target.value)}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: "block", marginBottom: 8 }}>האם לבן/בת הזוג יש הכנסה?</label>
+                  <select
+                    style={inputStyle()}
+                    value={onboardingData.hasPartnerIncome}
+                    onChange={(e) => updateOnboardingField("hasPartnerIncome", e.target.value)}
+                  >
+                    <option>לא</option>
+                    <option>כן</option>
+                  </select>
+                </div>
+              </div>
+            )}
+
+            {onboardingStep === 2 && (
+              <div style={{ display: "grid", gap: 18, gridTemplateColumns: "1fr 1fr" }}>
+                <div>
+                  <label style={{ display: "block", marginBottom: 8 }}>שכר חודשי שלך</label>
+                  <input
+                    style={inputStyle()}
+                    type="number"
+                    value={onboardingData.mySalary}
+                    onChange={(e) => updateOnboardingField("mySalary", e.target.value)}
+                  />
+                </div>
+
+                {onboardingData.hasPartnerIncome === "כן" && (
+                  <div>
+                    <label style={{ display: "block", marginBottom: 8 }}>שכר חודשי של בן/בת זוג</label>
+                    <input
+                      style={inputStyle()}
+                      type="number"
+                      value={onboardingData.partnerSalary}
+                      onChange={(e) => updateOnboardingField("partnerSalary", e.target.value)}
+                    />
+                  </div>
+                )}
+
+                <div>
+                  <label style={{ display: "block", marginBottom: 8 }}>הכנסה נוספת / קצבה</label>
+                  <input
+                    style={inputStyle()}
+                    type="number"
+                    value={onboardingData.otherIncome}
+                    onChange={(e) => updateOnboardingField("otherIncome", e.target.value)}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: "block", marginBottom: 8 }}>באיזה תאריך נכנסת המשכורת?</label>
+                  <select
+                    style={inputStyle()}
+                    value={onboardingData.salaryDay}
+                    onChange={(e) => updateOnboardingField("salaryDay", e.target.value)}
+                  >
+                    <option value="1">1 בחודש</option>
+                    <option value="5">5 בחודש</option>
+                    <option value="10">10 בחודש</option>
+                    <option value="15">15 בחודש</option>
+                    <option value="28">סוף חודש</option>
+                  </select>
+                </div>
+              </div>
+            )}
+
+            {onboardingStep === 3 && (
+              <div style={{ display: "grid", gap: 18, gridTemplateColumns: "1fr 1fr" }}>
+                <div>
+                  <label style={{ display: "block", marginBottom: 8 }}>שכר דירה / משכנתא</label>
+                  <input style={inputStyle()} type="number" value={onboardingData.housingCost} onChange={(e) => updateOnboardingField("housingCost", e.target.value)} />
+                </div>
+                <div>
+                  <label style={{ display: "block", marginBottom: 8 }}>ארנונה</label>
+                  <input style={inputStyle()} type="number" value={onboardingData.arnona} onChange={(e) => updateOnboardingField("arnona", e.target.value)} />
+                </div>
+                <div>
+                  <label style={{ display: "block", marginBottom: 8 }}>חשמל</label>
+                  <input style={inputStyle()} type="number" value={onboardingData.electricity} onChange={(e) => updateOnboardingField("electricity", e.target.value)} />
+                </div>
+                <div>
+                  <label style={{ display: "block", marginBottom: 8 }}>מים</label>
+                  <input style={inputStyle()} type="number" value={onboardingData.water} onChange={(e) => updateOnboardingField("water", e.target.value)} />
+                </div>
+                <div>
+                  <label style={{ display: "block", marginBottom: 8 }}>אינטרנט + סלולר</label>
+                  <input style={inputStyle()} type="number" value={onboardingData.internetPhone} onChange={(e) => updateOnboardingField("internetPhone", e.target.value)} />
+                </div>
+                <div>
+                  <label style={{ display: "block", marginBottom: 8 }}>רכב / תחבורה קבועה</label>
+                  <input style={inputStyle()} type="number" value={onboardingData.carTransportFixed} onChange={(e) => updateOnboardingField("carTransportFixed", e.target.value)} />
+                </div>
+                <div>
+                  <label style={{ display: "block", marginBottom: 8 }}>הלוואות</label>
+                  <input style={inputStyle()} type="number" value={onboardingData.loans} onChange={(e) => updateOnboardingField("loans", e.target.value)} />
+                </div>
+                <div>
+                  <label style={{ display: "block", marginBottom: 8 }}>חינוך קבוע</label>
+                  <input style={inputStyle()} type="number" value={onboardingData.educationFixed} onChange={(e) => updateOnboardingField("educationFixed", e.target.value)} />
+                </div>
+                <div>
+                  <label style={{ display: "block", marginBottom: 8 }}>ביטוחים</label>
+                  <input style={inputStyle()} type="number" value={onboardingData.insurance} onChange={(e) => updateOnboardingField("insurance", e.target.value)} />
+                </div>
+              </div>
+            )}
+
+            {onboardingStep === 4 && (
+              <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(3, 1fr)" }}>
+                {expenseCategories.map((categoryName) => (
+                  <div
+                    key={categoryName}
+                    style={{
+                      background: "rgba(255,255,255,0.08)",
+                      border: "1px solid rgba(255,255,255,0.12)",
+                      borderRadius: 18,
+                      padding: 16,
+                    }}
+                  >
+                    <div style={{ fontWeight: 700, marginBottom: 10 }}>{categoryName}</div>
+                    <input
+                      style={inputStyle()}
+                      type="number"
+                      value={onboardingData.suggestedBudgets[categoryName] ?? 0}
+                      onChange={(e) => updateSuggestedBudget(categoryName, e.target.value)}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {onboardingStep === 5 && (
+              <div style={{ display: "grid", gap: 20 }}>
+                <div
+                  style={{
+                    background: "rgba(34,197,94,0.15)",
+                    border: "1px solid rgba(34,197,94,0.35)",
+                    borderRadius: 20,
+                    padding: 18,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 12,
+                  }}
+                >
+                  <CheckCircle2 size={24} />
+                  <div>
+                    <div style={{ fontSize: 20, fontWeight: 700 }}>המערכת שלך כמעט מוכנה</div>
+                    <div style={{ marginTop: 6, color: "#dcfce7" }}>
+                      הנה הסיכום הראשוני שניצור עבורך בלחיצה אחת.
+                    </div>
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr 1fr",
+                    gap: 16,
+                  }}
+                >
+                  <div style={{ ...cardStyle(), background: "#ffffff", color: "#0f172a" }}>
+                    <div style={{ color: "#64748b", fontSize: 14 }}>הכנסות קבועות חודשיות</div>
+                    <div style={{ fontSize: 28, fontWeight: 700, marginTop: 8 }}>
+                      {formatCurrency(previewIncome)}
+                    </div>
+                  </div>
+
+                  <div style={{ ...cardStyle(), background: "#ffffff", color: "#0f172a" }}>
+                    <div style={{ color: "#64748b", fontSize: 14 }}>הוצאות קבועות חודשיות</div>
+                    <div style={{ fontSize: 28, fontWeight: 700, marginTop: 8 }}>
+                      {formatCurrency(previewExpense)}
+                    </div>
+                  </div>
+
+                  <div style={{ ...cardStyle(), background: "#ffffff", color: "#0f172a" }}>
+                    <div style={{ color: "#64748b", fontSize: 14 }}>תקציב משתנה מוצע</div>
+                    <div style={{ fontSize: 28, fontWeight: 700, marginTop: 8 }}>
+                      {formatCurrency(previewVariableBudget)}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ ...cardStyle(), background: "#ffffff", color: "#0f172a" }}>
+                  <div style={{ fontWeight: 700, fontSize: 20, marginBottom: 14 }}>
+                    תבניות קבועות שייווצרו
+                  </div>
+                  <div style={{ display: "grid", gap: 10 }}>
+                    {summaryTemplatesPreview.length === 0 ? (
+                      <div style={{ color: "#64748b" }}>לא הוגדרו עדיין הכנסות/הוצאות קבועות.</div>
+                    ) : (
+                      summaryTemplatesPreview.map((tpl) => (
+                        <div
+                          key={tpl.id}
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            padding: 12,
+                            background: "#f8fafc",
+                            borderRadius: 14,
+                            border: "1px solid #e2e8f0",
+                          }}
+                        >
+                          <div>
+                            <strong>{tpl.title}</strong>
+                            <div style={{ marginTop: 4, color: "#64748b", fontSize: 13 }}>
+                              {tpl.category} · בכל חודש בתאריך {tpl.dayOfMonth}
+                            </div>
+                          </div>
+                          <div
+                            style={{
+                              fontWeight: 700,
+                              color: tpl.type === "income" ? "#16a34a" : "#dc2626",
+                            }}
+                          >
+                            {tpl.type === "income" ? "+" : "-"}
+                            {formatCurrency(tpl.amount)}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                marginTop: 28,
+                gap: 12,
+              }}
+            >
+              <button
+                style={buttonStyle("outline")}
+                onClick={() => setOnboardingStep((prev) => Math.max(0, prev - 1))}
+                disabled={onboardingStep === 0}
+              >
+                הקודם
+              </button>
+
+              {onboardingStep < steps.length - 1 ? (
+                <button
+                  style={buttonStyle("success")}
+                  onClick={() => setOnboardingStep((prev) => Math.min(steps.length - 1, prev + 1))}
+                >
+                  המשך
+                </button>
+              ) : (
+                <button style={buttonStyle("success")} onClick={finishOnboarding}>
+                  סיים והיכנס לדשבורד
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -823,7 +1343,7 @@ export default function App() {
                 ודשבורד אחד שמרכז את כל מה שחשוב.
               </p>
 
-              <div style={{ marginTop: 18, maxWidth: 320 }}>
+              <div style={{ marginTop: 18, maxWidth: 340 }}>
                 <div style={{ fontSize: 13, color: "#cbd5e1", marginBottom: 8 }}>
                   חודש פעיל בדשבורד
                 </div>
