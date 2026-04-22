@@ -46,16 +46,7 @@ const recurrenceOptions = [
   { value: "variable", label: "משתנה" },
 ];
 
-const initialTransactions = [
-  {
-    id: 1,
-    type: "income",
-    title: "משכורת חודשית",
-    category: "משכורת",
-    amount: 12500,
-    date: "2026-04-02",
-    recurrence: "fixed",
-  },
+const initialManualTransactions = [
   {
     id: 2,
     type: "expense",
@@ -64,15 +55,6 @@ const initialTransactions = [
     amount: 860,
     date: "2026-04-04",
     recurrence: "variable",
-  },
-  {
-    id: 3,
-    type: "expense",
-    title: "שכר דירה",
-    category: "דיור",
-    amount: 4200,
-    date: "2026-04-05",
-    recurrence: "fixed",
   },
   {
     id: 4,
@@ -103,6 +85,29 @@ const initialTransactions = [
   },
 ];
 
+const initialRecurringTemplates = [
+  {
+    id: "tpl-salary",
+    type: "income",
+    title: "משכורת חודשית",
+    category: "משכורת",
+    amount: 12500,
+    startDate: "2026-04-02",
+    dayOfMonth: 2,
+    recurrence: "fixed",
+  },
+  {
+    id: "tpl-rent",
+    type: "expense",
+    title: "שכר דירה",
+    category: "דיור",
+    amount: 4200,
+    startDate: "2026-04-05",
+    dayOfMonth: 5,
+    recurrence: "fixed",
+  },
+];
+
 const defaultBudgets = {
   מזון: 2500,
   דיור: 4500,
@@ -115,8 +120,8 @@ const defaultBudgets = {
   אחר: 1000,
 };
 
-const STORAGE_KEY = "financial-platform-hebrew-data-v1";
-const USER_STORAGE_KEY = "financial-platform-user-v1";
+const STORAGE_KEY = "financial-platform-hebrew-data-v2";
+const USER_STORAGE_KEY = "financial-platform-user-v2";
 
 const chartColors = [
   "#2563eb",
@@ -153,6 +158,65 @@ function monthLabel(dateString) {
     month: "short",
     year: "numeric",
   }).format(d);
+}
+
+function startOfMonth(dateLike) {
+  const d = new Date(dateLike);
+  return new Date(d.getFullYear(), d.getMonth(), 1);
+}
+
+function addMonths(dateLike, months) {
+  const d = new Date(dateLike);
+  return new Date(d.getFullYear(), d.getMonth() + months, 1);
+}
+
+function toISODate(dateObj) {
+  return new Date(dateObj).toISOString().slice(0, 10);
+}
+
+function safeDay(year, monthIndex, day) {
+  const lastDay = new Date(year, monthIndex + 1, 0).getDate();
+  return Math.min(day, lastDay);
+}
+
+function generateRecurringOccurrences(templates, monthsBack = 12, monthsForward = 24) {
+  const now = new Date();
+  const rangeStart = addMonths(startOfMonth(now), -monthsBack);
+  const rangeEnd = addMonths(startOfMonth(now), monthsForward);
+
+  const generated = [];
+
+  templates.forEach((template) => {
+    const start = startOfMonth(template.startDate);
+    const iterationStart = start > rangeStart ? start : rangeStart;
+
+    for (
+      let cursor = new Date(iterationStart);
+      cursor <= rangeEnd;
+      cursor = addMonths(cursor, 1)
+    ) {
+      if (cursor < start) continue;
+
+      const year = cursor.getFullYear();
+      const month = cursor.getMonth();
+      const day = safeDay(year, month, template.dayOfMonth || new Date(template.startDate).getDate());
+
+      const occurrenceDate = new Date(year, month, day);
+      generated.push({
+        id: `${template.id}-${year}-${String(month + 1).padStart(2, "0")}`,
+        templateId: template.id,
+        sourceType: "template",
+        type: template.type,
+        title: template.title,
+        category: template.category,
+        amount: template.amount,
+        date: toISODate(occurrenceDate),
+        recurrence: "fixed",
+      });
+    }
+  });
+
+  return generated;
 }
 
 function cardStyle() {
@@ -253,17 +317,47 @@ function SummaryCard({ title, value, icon, subtitle, color }) {
   );
 }
 
+function EmptyState({ title, text }) {
+  return (
+    <div
+      style={{
+        border: "1px dashed #cbd5e1",
+        borderRadius: 18,
+        padding: 28,
+        textAlign: "center",
+        background: "#f8fafc",
+      }}
+    >
+      <div style={{ fontSize: 20, fontWeight: 700, color: "#334155" }}>
+        {title}
+      </div>
+      <div style={{ marginTop: 10, color: "#64748b" }}>{text}</div>
+    </div>
+  );
+}
+
 export default function App() {
   const [activeTab, setActiveTab] = useState("dashboard");
 
   const [transactions, setTransactions] = useState(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
-      if (!saved) return initialTransactions;
+      if (!saved) return initialManualTransactions;
       const parsed = JSON.parse(saved);
-      return parsed.transactions || initialTransactions;
+      return parsed.transactions || initialManualTransactions;
     } catch {
-      return initialTransactions;
+      return initialManualTransactions;
+    }
+  });
+
+  const [recurringTemplates, setRecurringTemplates] = useState(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (!saved) return initialRecurringTemplates;
+      const parsed = JSON.parse(saved);
+      return parsed.recurringTemplates || initialRecurringTemplates;
+    } catch {
+      return initialRecurringTemplates;
     }
   });
 
@@ -284,7 +378,9 @@ export default function App() {
   const [amount, setAmount] = useState("");
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [recurrence, setRecurrence] = useState("variable");
-  const [editingId, setEditingId] = useState(null);
+
+  const [editingTransactionId, setEditingTransactionId] = useState(null);
+  const [editingTemplateId, setEditingTemplateId] = useState(null);
 
   const [filterType, setFilterType] = useState("all");
   const [filterMonth, setFilterMonth] = useState("all");
@@ -305,10 +401,11 @@ export default function App() {
       STORAGE_KEY,
       JSON.stringify({
         transactions,
+        recurringTemplates,
         budgets,
       })
     );
-  }, [transactions, budgets]);
+  }, [transactions, recurringTemplates, budgets]);
 
   useEffect(() => {
     if (loggedInUser) {
@@ -321,22 +418,37 @@ export default function App() {
   const availableCategories =
     type === "income" ? incomeCategories : expenseCategories;
 
+  const generatedRecurringTransactions = useMemo(() => {
+    return generateRecurringOccurrences(recurringTemplates, 12, 24);
+  }, [recurringTemplates]);
+
+  const allVisibleTransactions = useMemo(() => {
+    const manual = transactions.map((t) => ({
+      ...t,
+      sourceType: "manual",
+    }));
+
+    return [...manual, ...generatedRecurringTransactions];
+  }, [transactions, generatedRecurringTransactions]);
+
   const monthOptions = useMemo(() => {
-    const keys = Array.from(new Set(transactions.map((t) => monthKey(t.date))))
+    const keys = Array.from(
+      new Set(allVisibleTransactions.map((t) => monthKey(t.date)))
+    )
       .sort()
       .reverse();
 
     return keys.map((key) => {
-      const sample = transactions.find((t) => monthKey(t.date) === key);
+      const sample = allVisibleTransactions.find((t) => monthKey(t.date) === key);
       return {
         key,
         label: sample ? monthLabel(sample.date) : key,
       };
     });
-  }, [transactions]);
+  }, [allVisibleTransactions]);
 
   const filteredTransactions = useMemo(() => {
-    return transactions.filter((t) => {
+    return allVisibleTransactions.filter((t) => {
       const typeMatch = filterType === "all" || t.type === filterType;
       const monthMatch =
         filterMonth === "all" || monthKey(t.date) === filterMonth;
@@ -344,7 +456,7 @@ export default function App() {
         filterRecurrence === "all" || t.recurrence === filterRecurrence;
       return typeMatch && monthMatch && recurrenceMatch;
     });
-  }, [transactions, filterType, filterMonth, filterRecurrence]);
+  }, [allVisibleTransactions, filterType, filterMonth, filterRecurrence]);
 
   const summary = useMemo(() => {
     const income = filteredTransactions
@@ -377,7 +489,7 @@ export default function App() {
   const monthlyData = useMemo(() => {
     const grouped = new Map();
 
-    [...transactions]
+    [...allVisibleTransactions]
       .sort((a, b) => new Date(a.date) - new Date(b.date))
       .forEach((t) => {
         const key = monthKey(t.date);
@@ -393,7 +505,7 @@ export default function App() {
       });
 
     return Array.from(grouped.values());
-  }, [transactions]);
+  }, [allVisibleTransactions]);
 
   const budgetStatus = useMemo(() => {
     return expenseCategories.map((categoryName) => {
@@ -420,7 +532,8 @@ export default function App() {
     .slice(0, 8);
 
   function resetForm() {
-    setEditingId(null);
+    setEditingTransactionId(null);
+    setEditingTemplateId(null);
     setType("expense");
     setTitle("");
     setCategory(expenseCategories[0]);
@@ -434,40 +547,92 @@ export default function App() {
       return;
     }
 
-    const payload = {
-      type,
-      title: title.trim(),
-      category,
-      amount: Number(amount),
-      date,
-      recurrence,
-    };
+    if (recurrence === "fixed") {
+      const templatePayload = {
+        type,
+        title: title.trim(),
+        category,
+        amount: Number(amount),
+        startDate: date,
+        dayOfMonth: new Date(date).getDate(),
+        recurrence: "fixed",
+      };
 
-    if (editingId) {
-      setTransactions((prev) =>
-        prev.map((t) => (t.id === editingId ? { ...t, ...payload } : t))
-      );
+      if (editingTemplateId) {
+        setRecurringTemplates((prev) =>
+          prev.map((tpl) =>
+            tpl.id === editingTemplateId ? { ...tpl, ...templatePayload } : tpl
+          )
+        );
+      } else {
+        setRecurringTemplates((prev) => [
+          {
+            id: `tpl-${Date.now()}`,
+            ...templatePayload,
+          },
+          ...prev,
+        ]);
+      }
     } else {
-      setTransactions((prev) => [{ id: Date.now(), ...payload }, ...prev]);
+      const payload = {
+        type,
+        title: title.trim(),
+        category,
+        amount: Number(amount),
+        date,
+        recurrence: "variable",
+      };
+
+      if (editingTransactionId) {
+        setTransactions((prev) =>
+          prev.map((t) =>
+            t.id === editingTransactionId ? { ...t, ...payload } : t
+          )
+        );
+      } else {
+        setTransactions((prev) => [{ id: Date.now(), ...payload }, ...prev]);
+      }
     }
 
     resetForm();
   }
 
   function startEditTransaction(transaction) {
-    setEditingId(transaction.id);
     setType(transaction.type);
     setTitle(transaction.title);
     setCategory(transaction.category);
     setAmount(String(transaction.amount));
     setDate(transaction.date);
     setRecurrence(transaction.recurrence || "variable");
+
+    if (transaction.sourceType === "template") {
+      const template = recurringTemplates.find(
+        (tpl) => tpl.id === transaction.templateId
+      );
+      if (template) {
+        setEditingTemplateId(template.id);
+        setEditingTransactionId(null);
+        setDate(template.startDate);
+        setRecurrence("fixed");
+      }
+    } else {
+      setEditingTransactionId(transaction.id);
+      setEditingTemplateId(null);
+    }
+
     setActiveTab("transactions");
   }
 
-  function removeTransaction(id) {
-    setTransactions((prev) => prev.filter((t) => t.id !== id));
-    if (editingId === id) resetForm();
+  function removeTransaction(transaction) {
+    if (transaction.sourceType === "template") {
+      setRecurringTemplates((prev) =>
+        prev.filter((tpl) => tpl.id !== transaction.templateId)
+      );
+      if (editingTemplateId === transaction.templateId) resetForm();
+    } else {
+      setTransactions((prev) => prev.filter((t) => t.id !== transaction.id));
+      if (editingTransactionId === transaction.id) resetForm();
+    }
   }
 
   function onTypeChange(nextType) {
@@ -508,7 +673,8 @@ export default function App() {
 
   function resetAllData() {
     localStorage.removeItem(STORAGE_KEY);
-    setTransactions(initialTransactions);
+    setTransactions(initialManualTransactions);
+    setRecurringTemplates(initialRecurringTemplates);
     setBudgets(defaultBudgets);
     setFilterType("all");
     setFilterMonth("all");
@@ -554,51 +720,9 @@ export default function App() {
     window.print();
   }
 
-  function createCurrentMonthFromFixedTransactions() {
-    const today = new Date();
-    const currentMonth = today.getMonth();
-    const currentYear = today.getFullYear();
-
-    const fixedTransactions = transactions.filter((t) => t.recurrence === "fixed");
-
-    const existingKeys = new Set(
-      transactions
-        .filter((t) => {
-          const d = new Date(t.date);
-          return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
-        })
-        .map(
-          (t) => `${t.title}-${t.category}-${t.type}-${t.amount}-${t.recurrence}`
-        )
-    );
-
-    const newMonthlyTransactions = fixedTransactions
-      .filter((t) => {
-        const d = new Date(t.date);
-        const isAlreadyCurrentMonth =
-          d.getMonth() === currentMonth && d.getFullYear() === currentYear;
-
-        const key = `${t.title}-${t.category}-${t.type}-${t.amount}-${t.recurrence}`;
-        return !isAlreadyCurrentMonth && !existingKeys.has(key);
-      })
-      .map((t, index) => ({
-        ...t,
-        id: Date.now() + index,
-        date: new Date(
-          currentYear,
-          currentMonth,
-          Math.min(new Date(t.date).getDate(), 28)
-        )
-          .toISOString()
-          .slice(0, 10),
-      }));
-
-    if (newMonthlyTransactions.length) {
-      setTransactions((prev) => [...newMonthlyTransactions, ...prev]);
-      setFilterMonth(
-        `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}`
-      );
-    }
+  function jumpToCurrentMonth() {
+    const now = new Date();
+    setFilterMonth(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
   }
 
   const tabs = [
@@ -958,117 +1082,11 @@ export default function App() {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "0.9fr 1.1fr",
+              gridTemplateColumns: "1.1fr 0.9fr",
               gap: 24,
               alignItems: "start",
             }}
           >
-            <div style={cardStyle()}>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  fontSize: 22,
-                  fontWeight: 700,
-                  marginBottom: 20,
-                }}
-              >
-                <Pencil size={20} />
-                {editingId ? "עריכת עסקה" : "הוספת עסקה חדשה"}
-              </div>
-
-              <div style={{ display: "grid", gap: 14 }}>
-                <div>
-                  <label style={{ display: "block", marginBottom: 8 }}>
-                    סוג עסקה
-                  </label>
-                  <select
-                    style={inputStyle()}
-                    value={type}
-                    onChange={(e) => onTypeChange(e.target.value)}
-                  >
-                    <option value="income">הכנסה</option>
-                    <option value="expense">הוצאה</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label style={{ display: "block", marginBottom: 8 }}>תיאור</label>
-                  <input
-                    style={inputStyle()}
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    placeholder="למשל: משכורת / קניות / תשלום מספק"
-                  />
-                </div>
-
-                <div>
-                  <label style={{ display: "block", marginBottom: 8 }}>קטגוריה</label>
-                  <select
-                    style={inputStyle()}
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
-                  >
-                    {availableCategories.map((cat) => (
-                      <option key={cat} value={cat}>
-                        {cat}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label style={{ display: "block", marginBottom: 8 }}>סכום</label>
-                  <input
-                    style={inputStyle()}
-                    type="number"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    placeholder="הזן סכום"
-                  />
-                </div>
-
-                <div>
-                  <label style={{ display: "block", marginBottom: 8 }}>תאריך</label>
-                  <input
-                    style={inputStyle()}
-                    type="date"
-                    value={date}
-                    onChange={(e) => setDate(e.target.value)}
-                  />
-                </div>
-
-                <div>
-                  <label style={{ display: "block", marginBottom: 8 }}>
-                    אופי העסקה
-                  </label>
-                  <select
-                    style={inputStyle()}
-                    value={recurrence}
-                    onChange={(e) => setRecurrence(e.target.value)}
-                  >
-                    {recurrenceOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div style={{ display: "flex", gap: 10 }}>
-                  <button style={{ ...buttonStyle(), width: "100%" }} onClick={saveTransaction}>
-                    {editingId ? "עדכן עסקה" : "שמור עסקה"}
-                  </button>
-                  {editingId && (
-                    <button style={buttonStyle("outline")} onClick={resetForm}>
-                      ביטול
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-
             <div style={cardStyle()}>
               <div
                 style={{
@@ -1119,12 +1137,9 @@ export default function App() {
               </div>
 
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 18 }}>
-                <button
-                  style={buttonStyle("outline")}
-                  onClick={createCurrentMonthFromFixedTransactions}
-                >
-                  <Sparkles size={16} style={{ marginLeft: 6 }} />
-                  צור לחודש הנוכחי עסקאות קבועות
+                <button style={buttonStyle("outline")} onClick={jumpToCurrentMonth}>
+                  <FileText size={16} style={{ marginLeft: 6 }} />
+                  עבור לחודש נוכחי
                 </button>
 
                 <button style={buttonStyle("outline")} onClick={exportToCSV}>
@@ -1148,7 +1163,7 @@ export default function App() {
                   text="נסה לשנות את הסינון או להוסיף עסקה חדשה."
                 />
               ) : (
-                <div style={{ display: "grid", gap: 12, maxHeight: 560, overflow: "auto" }}>
+                <div style={{ display: "grid", gap: 12, maxHeight: 700, overflow: "auto" }}>
                   {[...filteredTransactions]
                     .sort((a, b) => new Date(b.date) - new Date(a.date))
                     .map((t) => (
@@ -1220,6 +1235,19 @@ export default function App() {
                             >
                               {t.recurrence === "fixed" ? "קבועה" : "משתנה"}
                             </span>
+                            {t.sourceType === "template" && (
+                              <span
+                                style={{
+                                  borderRadius: 999,
+                                  padding: "4px 10px",
+                                  background: "#e0f2fe",
+                                  color: "#0369a1",
+                                  fontSize: 12,
+                                }}
+                              >
+                                נוצר מתבנית קבועה
+                              </span>
+                            )}
                           </div>
                         </div>
 
@@ -1252,7 +1280,7 @@ export default function App() {
 
                           <button
                             style={buttonStyle("outline")}
-                            onClick={() => removeTransaction(t.id)}
+                            onClick={() => removeTransaction(t)}
                           >
                             <Trash2 size={16} />
                           </button>
@@ -1261,6 +1289,140 @@ export default function App() {
                     ))}
                 </div>
               )}
+            </div>
+
+            <div style={cardStyle()}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  fontSize: 22,
+                  fontWeight: 700,
+                  marginBottom: 20,
+                }}
+              >
+                <Pencil size={20} />
+                {editingTemplateId
+                  ? "עריכת תבנית קבועה"
+                  : editingTransactionId
+                  ? "עריכת עסקה"
+                  : "הוספת עסקה חדשה"}
+              </div>
+
+              <div style={{ display: "grid", gap: 14 }}>
+                <div>
+                  <label style={{ display: "block", marginBottom: 8 }}>
+                    סוג עסקה
+                  </label>
+                  <select
+                    style={inputStyle()}
+                    value={type}
+                    onChange={(e) => onTypeChange(e.target.value)}
+                  >
+                    <option value="income">הכנסה</option>
+                    <option value="expense">הוצאה</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ display: "block", marginBottom: 8 }}>תיאור</label>
+                  <input
+                    style={inputStyle()}
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="למשל: משכורת / קניות / תשלום מספק"
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: "block", marginBottom: 8 }}>קטגוריה</label>
+                  <select
+                    style={inputStyle()}
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value)}
+                  >
+                    {availableCategories.map((cat) => (
+                      <option key={cat} value={cat}>
+                        {cat}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ display: "block", marginBottom: 8 }}>סכום</label>
+                  <input
+                    style={inputStyle()}
+                    type="number"
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    placeholder="הזן סכום"
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: "block", marginBottom: 8 }}>תאריך התחלה</label>
+                  <input
+                    style={inputStyle()}
+                    type="date"
+                    value={date}
+                    onChange={(e) => setDate(e.target.value)}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: "block", marginBottom: 8 }}>
+                    אופי העסקה
+                  </label>
+                  <select
+                    style={inputStyle()}
+                    value={recurrence}
+                    onChange={(e) => setRecurrence(e.target.value)}
+                  >
+                    {recurrenceOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {recurrence === "fixed" && (
+                  <div
+                    style={{
+                      background: "#eff6ff",
+                      border: "1px solid #bfdbfe",
+                      borderRadius: 16,
+                      padding: 14,
+                      color: "#1e3a8a",
+                      fontSize: 14,
+                      lineHeight: 1.7,
+                    }}
+                  >
+                    עסקה קבועה נשמרת כתבנית חודשית. המערכת תיצור אותה אוטומטית
+                    לכל חודש עתידי לפי תאריך ההתחלה.
+                  </div>
+                )}
+
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button
+                    style={{ ...buttonStyle(), width: "100%" }}
+                    onClick={saveTransaction}
+                  >
+                    {editingTemplateId
+                      ? "עדכן תבנית קבועה"
+                      : editingTransactionId
+                      ? "עדכן עסקה"
+                      : "שמור עסקה"}
+                  </button>
+                  {(editingTemplateId || editingTransactionId) && (
+                    <button style={buttonStyle("outline")} onClick={resetForm}>
+                      ביטול
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         )}
