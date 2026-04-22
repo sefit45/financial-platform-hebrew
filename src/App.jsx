@@ -1,28 +1,18 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
-  Trash2,
-  Plus,
   Wallet,
   ArrowUpCircle,
   ArrowDownCircle,
-  PieChart as PieChartIcon,
-  TrendingUp,
   ReceiptText,
   Repeat,
   Shuffle,
   Sparkles,
   Pencil,
+  Trash2,
   Download,
   FileText,
+  TrendingUp,
+  PieChart as PieChartIcon,
 } from "lucide-react";
 import {
   PieChart,
@@ -37,11 +27,19 @@ import {
   ResponsiveContainer,
   Legend,
 } from "recharts";
-import { motion } from "framer-motion";
 
 const incomeCategories = ["משכורת", "עסק", "השקעות", "החזר", "אחר"];
-const expenseCategories = ["מזון", "דיור", "תחבורה", "בילויים", "חשבונות", "בריאות", "חינוך", "קניות", "אחר"];
-const paymentMethodOptions = ["מזומן", "אשראי", "בנק", "BIT / PayBox", "העברה בנקאית", "אחר"];
+const expenseCategories = [
+  "מזון",
+  "דיור",
+  "תחבורה",
+  "בילויים",
+  "חשבונות",
+  "בריאות",
+  "חינוך",
+  "קניות",
+  "אחר",
+];
 
 const recurrenceOptions = [
   { value: "fixed", label: "קבועה" },
@@ -57,7 +55,6 @@ const initialTransactions = [
     amount: 12500,
     date: "2026-04-02",
     recurrence: "fixed",
-    paymentMethod: "בנק",
   },
   {
     id: 2,
@@ -67,7 +64,6 @@ const initialTransactions = [
     amount: 860,
     date: "2026-04-04",
     recurrence: "variable",
-    paymentMethod: "אשראי",
   },
   {
     id: 3,
@@ -86,7 +82,6 @@ const initialTransactions = [
     amount: 3400,
     date: "2026-04-08",
     recurrence: "variable",
-    paymentMethod: "אשראי",
   },
   {
     id: 5,
@@ -96,7 +91,6 @@ const initialTransactions = [
     amount: 540,
     date: "2026-04-11",
     recurrence: "variable",
-    paymentMethod: "אשראי",
   },
   {
     id: 6,
@@ -106,13 +100,8 @@ const initialTransactions = [
     amount: 290,
     date: "2026-04-13",
     recurrence: "variable",
-    paymentMethod: "אשראי",
   },
 ];
-
-const chartColors = ["#2563eb", "#16a34a", "#dc2626", "#9333ea", "#ea580c", "#0891b2", "#ca8a04", "#4f46e5", "#64748b"];
-const STORAGE_KEY = "financial-platform-hebrew-rtl-data-v2";
-const USER_STORAGE_KEY = "financial-platform-user";
 
 const defaultBudgets = {
   מזון: 2500,
@@ -125,6 +114,21 @@ const defaultBudgets = {
   קניות: 1500,
   אחר: 1000,
 };
+
+const STORAGE_KEY = "financial-platform-hebrew-data-v1";
+const USER_STORAGE_KEY = "financial-platform-user-v1";
+
+const chartColors = [
+  "#2563eb",
+  "#16a34a",
+  "#dc2626",
+  "#9333ea",
+  "#ea580c",
+  "#0891b2",
+  "#ca8a04",
+  "#4f46e5",
+  "#64748b",
+];
 
 function formatCurrency(value) {
   return new Intl.NumberFormat("he-IL", {
@@ -145,147 +149,212 @@ function monthKey(dateString) {
 
 function monthLabel(dateString) {
   const d = new Date(dateString);
-  return new Intl.DateTimeFormat("he-IL", { month: "short", year: "numeric" }).format(d);
+  return new Intl.DateTimeFormat("he-IL", {
+    month: "short",
+    year: "numeric",
+  }).format(d);
 }
 
-function loadSavedAppState() {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
+function cardStyle() {
+  return {
+    background: "#fff",
+    borderRadius: 20,
+    padding: 20,
+    boxShadow: "0 8px 30px rgba(15,23,42,0.08)",
+    border: "1px solid #e2e8f0",
+  };
+}
+
+function buttonStyle(kind = "primary") {
+  const common = {
+    borderRadius: 14,
+    padding: "10px 14px",
+    border: "1px solid transparent",
+    cursor: "pointer",
+    fontSize: 14,
+    fontWeight: 600,
+  };
+
+  if (kind === "outline") {
+    return {
+      ...common,
+      background: "#fff",
+      color: "#0f172a",
+      border: "1px solid #cbd5e1",
+    };
   }
+
+  if (kind === "danger") {
+    return {
+      ...common,
+      background: "#dc2626",
+      color: "#fff",
+    };
+  }
+
+  return {
+    ...common,
+    background: "#0f172a",
+    color: "#fff",
+  };
 }
 
-function SummaryCard({ title, value, icon, subtitle, positive }) {
+function inputStyle() {
+  return {
+    width: "100%",
+    borderRadius: 12,
+    border: "1px solid #cbd5e1",
+    padding: "10px 12px",
+    fontSize: 14,
+    boxSizing: "border-box",
+    background: "#fff",
+  };
+}
+
+function SummaryCard({ title, value, icon, subtitle, color }) {
   return (
-    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-      <Card className="rounded-2xl border-0 bg-white/90 shadow-lg backdrop-blur">
-        <CardContent className="p-5">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-sm text-slate-500">{title}</p>
-              <h3
-                className={`mt-2 text-2xl font-bold ${
-                  positive === false ? "text-red-600" : positive === true ? "text-green-600" : "text-slate-900"
-                }`}
-              >
-                {value}
-              </h3>
-              <p className="mt-1 text-xs text-slate-500">{subtitle}</p>
-            </div>
-            <div className="rounded-2xl bg-slate-100 p-3 text-slate-700">{icon}</div>
+    <div style={cardStyle()}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          gap: 12,
+        }}
+      >
+        <div>
+          <div style={{ color: "#64748b", fontSize: 14 }}>{title}</div>
+          <div
+            style={{
+              marginTop: 8,
+              fontSize: 28,
+              fontWeight: 700,
+              color: color || "#0f172a",
+            }}
+          >
+            {value}
           </div>
-        </CardContent>
-      </Card>
-    </motion.div>
-  );
-}
-
-function EmptyState({ title, text }) {
-  return (
-    <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
-      <p className="text-lg font-semibold text-slate-700">{title}</p>
-      <p className="mt-2 text-sm text-slate-500">{text}</p>
+          <div style={{ marginTop: 6, fontSize: 12, color: "#94a3b8" }}>
+            {subtitle}
+          </div>
+        </div>
+        <div
+          style={{
+            background: "#f1f5f9",
+            borderRadius: 16,
+            padding: 12,
+            color: "#334155",
+          }}
+        >
+          {icon}
+        </div>
+      </div>
     </div>
   );
 }
 
-export default function FinancialPlatformHebrewRTL() {
-  const savedState = loadSavedAppState();
+export default function App() {
+  const [activeTab, setActiveTab] = useState("dashboard");
 
-  const [transactions, setTransactions] = useState(
-    savedState?.transactions?.length ? savedState.transactions : initialTransactions
-  );
-  const [type, setType] = useState(savedState?.type || "expense");
+  const [transactions, setTransactions] = useState(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (!saved) return initialTransactions;
+      const parsed = JSON.parse(saved);
+      return parsed.transactions || initialTransactions;
+    } catch {
+      return initialTransactions;
+    }
+  });
+
+  const [budgets, setBudgets] = useState(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (!saved) return defaultBudgets;
+      const parsed = JSON.parse(saved);
+      return parsed.budgets || defaultBudgets;
+    } catch {
+      return defaultBudgets;
+    }
+  });
+
+  const [type, setType] = useState("expense");
   const [title, setTitle] = useState("");
-  const [category, setCategory] = useState(savedState?.category || expenseCategories[0]);
+  const [category, setCategory] = useState(expenseCategories[0]);
   const [amount, setAmount] = useState("");
-  const [date, setDate] = useState(savedState?.date || new Date().toISOString().slice(0, 10));
-  const [recurrence, setRecurrence] = useState(savedState?.recurrence || "variable");
-  const [filterType, setFilterType] = useState(savedState?.filterType || "all");
-  const [filterMonth, setFilterMonth] = useState(savedState?.filterMonth || "all");
-  const [filterRecurrence, setFilterRecurrence] = useState(savedState?.filterRecurrence || "all");
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [recurrence, setRecurrence] = useState("variable");
   const [editingId, setEditingId] = useState(null);
-  const [paymentMethod, setPaymentMethod] = useState(savedState?.paymentMethod || "אשראי");
-  const [budgets, setBudgets] = useState(savedState?.budgets || defaultBudgets);
 
-  const [deferredPrompt, setDeferredPrompt] = useState(null);
-  const [showInstallButton, setShowInstallButton] = useState(false);
+  const [filterType, setFilterType] = useState("all");
+  const [filterMonth, setFilterMonth] = useState("all");
+  const [filterRecurrence, setFilterRecurrence] = useState("all");
 
   const [userEmail, setUserEmail] = useState("");
   const [userPassword, setUserPassword] = useState("");
   const [loggedInUser, setLoggedInUser] = useState(() => {
-    if (typeof window === "undefined") return null;
     try {
-      return window.localStorage.getItem(USER_STORAGE_KEY) || null;
+      return localStorage.getItem(USER_STORAGE_KEY) || "";
     } catch {
-      return null;
+      return "";
     }
   });
 
-  const availableCategories = type === "income" ? incomeCategories : expenseCategories;
-
   useEffect(() => {
-    const handleBeforeInstallPrompt = (event) => {
-      event.preventDefault();
-      setDeferredPrompt(event);
-      setShowInstallButton(true);
-    };
-
-    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
-    return () => window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (loggedInUser) {
-      window.localStorage.setItem(USER_STORAGE_KEY, loggedInUser);
-    } else {
-      window.localStorage.removeItem(USER_STORAGE_KEY);
-    }
-  }, [loggedInUser]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem(
+    localStorage.setItem(
       STORAGE_KEY,
       JSON.stringify({
         transactions,
-        type,
-        category,
-        date,
-        recurrence,
-        paymentMethod,
         budgets,
-        filterType,
-        filterMonth,
-        filterRecurrence,
       })
     );
-  }, [transactions, type, category, date, recurrence, paymentMethod, budgets, filterType, filterMonth, filterRecurrence]);
+  }, [transactions, budgets]);
+
+  useEffect(() => {
+    if (loggedInUser) {
+      localStorage.setItem(USER_STORAGE_KEY, loggedInUser);
+    } else {
+      localStorage.removeItem(USER_STORAGE_KEY);
+    }
+  }, [loggedInUser]);
+
+  const availableCategories =
+    type === "income" ? incomeCategories : expenseCategories;
 
   const monthOptions = useMemo(() => {
-    const keys = Array.from(new Set(transactions.map((t) => monthKey(t.date)))).sort().reverse();
+    const keys = Array.from(new Set(transactions.map((t) => monthKey(t.date))))
+      .sort()
+      .reverse();
+
     return keys.map((key) => {
       const sample = transactions.find((t) => monthKey(t.date) === key);
-      return { key, label: sample ? monthLabel(sample.date) : key };
+      return {
+        key,
+        label: sample ? monthLabel(sample.date) : key,
+      };
     });
   }, [transactions]);
 
   const filteredTransactions = useMemo(() => {
     return transactions.filter((t) => {
       const typeMatch = filterType === "all" || t.type === filterType;
-      const monthMatch = filterMonth === "all" || monthKey(t.date) === filterMonth;
-      const recurrenceMatch = filterRecurrence === "all" || t.recurrence === filterRecurrence;
+      const monthMatch =
+        filterMonth === "all" || monthKey(t.date) === filterMonth;
+      const recurrenceMatch =
+        filterRecurrence === "all" || t.recurrence === filterRecurrence;
       return typeMatch && monthMatch && recurrenceMatch;
     });
   }, [transactions, filterType, filterMonth, filterRecurrence]);
 
   const summary = useMemo(() => {
-    const income = filteredTransactions.filter((t) => t.type === "income").reduce((sum, t) => sum + t.amount, 0);
-    const expense = filteredTransactions.filter((t) => t.type === "expense").reduce((sum, t) => sum + t.amount, 0);
+    const income = filteredTransactions
+      .filter((t) => t.type === "income")
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    const expense = filteredTransactions
+      .filter((t) => t.type === "expense")
+      .reduce((sum, t) => sum + t.amount, 0);
+
     return {
       income,
       expense,
@@ -301,16 +370,40 @@ export default function FinancialPlatformHebrewRTL() {
       .forEach((t) => {
         map.set(t.category, (map.get(t.category) || 0) + t.amount);
       });
+
     return Array.from(map.entries()).map(([name, value]) => ({ name, value }));
   }, [filteredTransactions]);
+
+  const monthlyData = useMemo(() => {
+    const grouped = new Map();
+
+    [...transactions]
+      .sort((a, b) => new Date(a.date) - new Date(b.date))
+      .forEach((t) => {
+        const key = monthKey(t.date);
+        const label = monthLabel(t.date);
+
+        if (!grouped.has(key)) {
+          grouped.set(key, { month: label, הכנסות: 0, הוצאות: 0 });
+        }
+
+        const row = grouped.get(key);
+        if (t.type === "income") row["הכנסות"] += t.amount;
+        else row["הוצאות"] += t.amount;
+      });
+
+    return Array.from(grouped.values());
+  }, [transactions]);
 
   const budgetStatus = useMemo(() => {
     return expenseCategories.map((categoryName) => {
       const spent = filteredTransactions
         .filter((t) => t.type === "expense" && t.category === categoryName)
         .reduce((sum, t) => sum + t.amount, 0);
+
       const budget = Number(budgets[categoryName] || 0);
       const percent = budget > 0 ? Math.round((spent / budget) * 100) : 0;
+
       return {
         category: categoryName,
         spent,
@@ -322,38 +415,24 @@ export default function FinancialPlatformHebrewRTL() {
     });
   }, [filteredTransactions, budgets]);
 
-  const monthlyData = useMemo(() => {
-    const grouped = new Map();
-    [...transactions]
-      .sort((a, b) => new Date(a.date) - new Date(b.date))
-      .forEach((t) => {
-        const key = monthKey(t.date);
-        const label = monthLabel(t.date);
-        if (!grouped.has(key)) grouped.set(key, { month: label, הכנסות: 0, הוצאות: 0 });
-        const row = grouped.get(key);
-        if (t.type === "income") row["הכנסות"] += t.amount;
-        else row["הוצאות"] += t.amount;
-      });
-    return Array.from(grouped.values());
-  }, [transactions]);
-
   const latestTransactions = [...filteredTransactions]
     .sort((a, b) => new Date(b.date) - new Date(a.date))
     .slice(0, 8);
 
   function resetForm() {
     setEditingId(null);
+    setType("expense");
     setTitle("");
+    setCategory(expenseCategories[0]);
     setAmount("");
     setDate(new Date().toISOString().slice(0, 10));
-    setType("expense");
-    setCategory(expenseCategories[0]);
     setRecurrence("variable");
-    setPaymentMethod("אשראי");
   }
 
   function saveTransaction() {
-    if (!title.trim() || !amount || Number(amount) <= 0 || !date || !category) return;
+    if (!title.trim() || !amount || Number(amount) <= 0 || !date || !category) {
+      return;
+    }
 
     const payload = {
       type,
@@ -362,11 +441,12 @@ export default function FinancialPlatformHebrewRTL() {
       amount: Number(amount),
       date,
       recurrence,
-      paymentMethod,
     };
 
     if (editingId) {
-      setTransactions((prev) => prev.map((t) => (t.id === editingId ? { ...t, ...payload } : t)));
+      setTransactions((prev) =>
+        prev.map((t) => (t.id === editingId ? { ...t, ...payload } : t))
+      );
     } else {
       setTransactions((prev) => [{ id: Date.now(), ...payload }, ...prev]);
     }
@@ -382,7 +462,7 @@ export default function FinancialPlatformHebrewRTL() {
     setAmount(String(transaction.amount));
     setDate(transaction.date);
     setRecurrence(transaction.recurrence || "variable");
-    setPaymentMethod(transaction.paymentMethod || "אשראי");
+    setActiveTab("transactions");
   }
 
   function removeTransaction(id) {
@@ -392,7 +472,9 @@ export default function FinancialPlatformHebrewRTL() {
 
   function onTypeChange(nextType) {
     setType(nextType);
-    setCategory(nextType === "income" ? incomeCategories[0] : expenseCategories[0]);
+    setCategory(
+      nextType === "income" ? incomeCategories[0] : expenseCategories[0]
+    );
   }
 
   function handleLogin() {
@@ -408,7 +490,7 @@ export default function FinancialPlatformHebrewRTL() {
   }
 
   function handleLogout() {
-    setLoggedInUser(null);
+    setLoggedInUser("");
     setUserEmail("");
     setUserPassword("");
   }
@@ -425,10 +507,9 @@ export default function FinancialPlatformHebrewRTL() {
   }
 
   function resetAllData() {
-    if (typeof window !== "undefined") {
-      window.localStorage.removeItem(STORAGE_KEY);
-    }
+    localStorage.removeItem(STORAGE_KEY);
     setTransactions(initialTransactions);
+    setBudgets(defaultBudgets);
     setFilterType("all");
     setFilterMonth("all");
     setFilterRecurrence("all");
@@ -437,6 +518,7 @@ export default function FinancialPlatformHebrewRTL() {
 
   function exportToCSV() {
     const headers = ["תאריך", "תיאור", "סוג", "קטגוריה", "אופי", "סכום"];
+
     const rows = filteredTransactions.map((t) => [
       formatDate(t.date),
       t.title,
@@ -447,15 +529,21 @@ export default function FinancialPlatformHebrewRTL() {
     ]);
 
     const csvContent = [headers, ...rows]
-      .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
-      .join("
-");
+      .map((row) =>
+        row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",")
+      )
+      .join("\n");
 
-    const blob = new Blob(["﻿" + csvContent], { type: "text/csv;charset=utf-8;" });
+    const blob = new Blob(["\uFEFF" + csvContent], {
+      type: "text/csv;charset=utf-8;",
+    });
+
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `financial-report-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.download = `financial-report-${new Date()
+      .toISOString()
+      .slice(0, 10)}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -466,236 +554,393 @@ export default function FinancialPlatformHebrewRTL() {
     window.print();
   }
 
-  async function installApp() {
-    if (!deferredPrompt) return;
-    deferredPrompt.prompt();
-    await deferredPrompt.userChoice;
-    setDeferredPrompt(null);
-    setShowInstallButton(false);
-  }
-
   function createCurrentMonthFromFixedTransactions() {
     const today = new Date();
     const currentMonth = today.getMonth();
     const currentYear = today.getFullYear();
+
     const fixedTransactions = transactions.filter((t) => t.recurrence === "fixed");
 
-    const alreadyExistingKeys = new Set(
+    const existingKeys = new Set(
       transactions
         .filter((t) => {
           const d = new Date(t.date);
           return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
         })
-        .map((t) => `${t.title}-${t.category}-${t.type}-${t.amount}-${t.recurrence}`)
+        .map(
+          (t) => `${t.title}-${t.category}-${t.type}-${t.amount}-${t.recurrence}`
+        )
     );
 
     const newMonthlyTransactions = fixedTransactions
       .filter((t) => {
-        const key = `${t.title}-${t.category}-${t.type}-${t.amount}-${t.recurrence}`;
         const d = new Date(t.date);
-        const alreadyInCurrentMonth = d.getMonth() === currentMonth && d.getFullYear() === currentYear;
-        return !alreadyInCurrentMonth && !alreadyExistingKeys.has(key);
+        const isAlreadyCurrentMonth =
+          d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+
+        const key = `${t.title}-${t.category}-${t.type}-${t.amount}-${t.recurrence}`;
+        return !isAlreadyCurrentMonth && !existingKeys.has(key);
       })
       .map((t, index) => ({
         ...t,
         id: Date.now() + index,
-        date: new Date(currentYear, currentMonth, Math.min(new Date(t.date).getDate(), 28)).toISOString().slice(0, 10),
+        date: new Date(
+          currentYear,
+          currentMonth,
+          Math.min(new Date(t.date).getDate(), 28)
+        )
+          .toISOString()
+          .slice(0, 10),
       }));
 
     if (newMonthlyTransactions.length) {
       setTransactions((prev) => [...newMonthlyTransactions, ...prev]);
-      setFilterMonth(`${currentYear}-${String(currentMonth + 1).padStart(2, "0")}`);
+      setFilterMonth(
+        `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}`
+      );
     }
   }
 
+  const tabs = [
+    { key: "dashboard", label: "דשבורד" },
+    { key: "transactions", label: "עסקאות" },
+    { key: "reports", label: "דוחות" },
+  ];
+
   return (
-    <div dir="rtl" className="min-h-screen bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50 text-slate-900">
-      <div className="mx-auto max-w-7xl p-4 md:p-8">
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-8 overflow-hidden rounded-[28px] bg-slate-900 p-6 text-white shadow-2xl md:p-8"
+    <div
+      dir="rtl"
+      style={{
+        minHeight: "100vh",
+        background:
+          "linear-gradient(135deg, #f1f5f9 0%, #f8fafc 45%, #eff6ff 100%)",
+        color: "#0f172a",
+        fontFamily: "Arial, Helvetica, sans-serif",
+      }}
+    >
+      <div style={{ maxWidth: 1280, margin: "0 auto", padding: 16 }}>
+        <div
+          style={{
+            background: "#0f172a",
+            color: "#fff",
+            borderRadius: 28,
+            padding: 24,
+            boxShadow: "0 20px 50px rgba(15,23,42,0.25)",
+            marginBottom: 24,
+          }}
         >
-          <div className="grid gap-6 md:grid-cols-[1.5fr_1fr] md:items-center">
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1.5fr 1fr",
+              gap: 24,
+            }}
+          >
             <div>
-              <div className="mb-4 flex flex-wrap items-center gap-3">
-                <Badge className="rounded-full bg-white/15 px-3 py-1 text-white hover:bg-white/15">פלטפורמה פיננסית חכמה</Badge>
-                {showInstallButton && (
-                  <Button
-                    onClick={installApp}
-                    size="sm"
-                    variant="secondary"
-                    className="rounded-full bg-white text-slate-900 hover:bg-slate-100"
-                  >
-                    התקן כאפליקציה
-                  </Button>
-                )}
+              <div
+                style={{
+                  display: "inline-block",
+                  background: "rgba(255,255,255,0.14)",
+                  borderRadius: 999,
+                  padding: "8px 12px",
+                  marginBottom: 16,
+                  fontSize: 13,
+                }}
+              >
+                פלטפורמה פיננסית חכמה
               </div>
-              <h1 className="text-2xl font-bold leading-tight md:text-5xl">ניהול כספים בעברית, בצורה ברורה ומקצועית</h1>
-              <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-200 md:text-base md:leading-7">
-                מעקב אחר הכנסות והוצאות, ניתוח קטגוריות, תזרים מזומנים חודשי ודשבורד אחד שמרכז את כל מה שחשוב.
+              <h1 style={{ margin: 0, fontSize: 40, lineHeight: 1.2 }}>
+                ניהול כספים בעברית, בצורה ברורה ומקצועית
+              </h1>
+              <p
+                style={{
+                  marginTop: 16,
+                  maxWidth: 720,
+                  color: "#cbd5e1",
+                  lineHeight: 1.8,
+                }}
+              >
+                מעקב אחר הכנסות והוצאות, ניתוח קטגוריות, תזרים מזומנים חודשי
+                ודשבורד אחד שמרכז את כל מה שחשוב.
               </p>
             </div>
-            <div className="grid gap-3 rounded-3xl bg-white/10 p-4 backdrop-blur">
-              <div className="flex items-center justify-between rounded-2xl bg-white/10 p-4">
-                <span className="text-sm text-slate-200">יתרה נוכחית</span>
-                <span className="text-xl font-bold">{formatCurrency(summary.balance)}</span>
+
+            <div
+              style={{
+                background: "rgba(255,255,255,0.08)",
+                borderRadius: 24,
+                padding: 16,
+              }}
+            >
+              <div
+                style={{
+                  background: "rgba(255,255,255,0.08)",
+                  borderRadius: 18,
+                  padding: 16,
+                  display: "flex",
+                  justifyContent: "space-between",
+                }}
+              >
+                <span>יתרה נוכחית</span>
+                <strong style={{ fontSize: 24 }}>
+                  {formatCurrency(summary.balance)}
+                </strong>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-2xl bg-white/10 p-4">
-                  <p className="text-xs text-slate-200">הכנסות</p>
-                  <p className="mt-2 text-lg font-bold">{formatCurrency(summary.income)}</p>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: 12,
+                  marginTop: 12,
+                }}
+              >
+                <div
+                  style={{
+                    background: "rgba(255,255,255,0.08)",
+                    borderRadius: 18,
+                    padding: 16,
+                  }}
+                >
+                  <div style={{ fontSize: 12, color: "#cbd5e1" }}>הכנסות</div>
+                  <div style={{ marginTop: 8, fontSize: 20, fontWeight: 700 }}>
+                    {formatCurrency(summary.income)}
+                  </div>
                 </div>
-                <div className="rounded-2xl bg-white/10 p-4">
-                  <p className="text-xs text-slate-200">הוצאות</p>
-                  <p className="mt-2 text-lg font-bold">{formatCurrency(summary.expense)}</p>
+                <div
+                  style={{
+                    background: "rgba(255,255,255,0.08)",
+                    borderRadius: 18,
+                    padding: 16,
+                  }}
+                >
+                  <div style={{ fontSize: 12, color: "#cbd5e1" }}>הוצאות</div>
+                  <div style={{ marginTop: 8, fontSize: 20, fontWeight: 700 }}>
+                    {formatCurrency(summary.expense)}
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </motion.div>
+        </div>
 
-        <Card className="mb-6 rounded-3xl border-0 bg-white shadow-lg">
-          <CardContent className="p-5">
-            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-              <div>
-                <p className="text-sm text-slate-500">אזור משתמש</p>
-                <h2 className="text-xl font-bold">התחברות / הרשמה</h2>
-                <p className="mt-1 text-sm text-slate-500">שלב ראשון לגרסה מסחרית עם משתמשים אישיים וסנכרון עתידי בענן</p>
+        <div style={{ ...cardStyle(), marginBottom: 24 }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 16,
+              flexWrap: "wrap",
+            }}
+          >
+            <div>
+              <div style={{ fontSize: 14, color: "#64748b" }}>אזור משתמש</div>
+              <div style={{ fontSize: 24, fontWeight: 700, marginTop: 4 }}>
+                התחברות / הרשמה
               </div>
-              <div className="flex flex-wrap gap-3">
-                {loggedInUser ? (
-                  <>
-                    <div className="rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
-                      מחובר כעת: <span className="font-semibold">{loggedInUser}</span>
-                    </div>
-                    <Button onClick={handleLogout} variant="outline" className="rounded-2xl">
-                      התנתקות
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <Input
-                      placeholder="אימייל"
-                      value={userEmail}
-                      onChange={(e) => setUserEmail(e.target.value)}
-                      className="w-[220px] rounded-xl"
-                    />
-                    <Input
-                      type="password"
-                      placeholder="סיסמה"
-                      value={userPassword}
-                      onChange={(e) => setUserPassword(e.target.value)}
-                      className="w-[220px] rounded-xl"
-                    />
-                    <Button onClick={handleLogin} className="rounded-2xl">
-                      התחברות
-                    </Button>
-                    <Button onClick={handleRegister} variant="outline" className="rounded-2xl">
-                      הרשמה
-                    </Button>
-                  </>
-                )}
+              <div style={{ color: "#64748b", marginTop: 6, fontSize: 14 }}>
+                שלב ראשון לגרסה מסחרית עם משתמשים אישיים וסנכרון עתידי בענן
               </div>
             </div>
-          </CardContent>
-        </Card>
 
-        <Tabs defaultValue="dashboard" className="space-y-6">
-          <TabsList className="sticky top-2 z-20 grid w-full grid-cols-3 rounded-2xl bg-white p-1 shadow-md">
-            <TabsTrigger value="dashboard" className="rounded-xl">
-              דשבורד
-            </TabsTrigger>
-            <TabsTrigger value="transactions" className="rounded-xl">
-              עסקאות
-            </TabsTrigger>
-            <TabsTrigger value="reports" className="rounded-xl">
-              דוחות
-            </TabsTrigger>
-          </TabsList>
+            <div
+              style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}
+            >
+              {loggedInUser ? (
+                <>
+                  <div
+                    style={{
+                      background: "#dcfce7",
+                      color: "#166534",
+                      border: "1px solid #86efac",
+                      borderRadius: 16,
+                      padding: "12px 16px",
+                    }}
+                  >
+                    מחובר כעת: <strong>{loggedInUser}</strong>
+                  </div>
+                  <button style={buttonStyle("outline")} onClick={handleLogout}>
+                    התנתקות
+                  </button>
+                </>
+              ) : (
+                <>
+                  <input
+                    style={{ ...inputStyle(), width: 220 }}
+                    placeholder="אימייל"
+                    value={userEmail}
+                    onChange={(e) => setUserEmail(e.target.value)}
+                  />
+                  <input
+                    style={{ ...inputStyle(), width: 220 }}
+                    type="password"
+                    placeholder="סיסמה"
+                    value={userPassword}
+                    onChange={(e) => setUserPassword(e.target.value)}
+                  />
+                  <button style={buttonStyle()} onClick={handleLogin}>
+                    התחברות
+                  </button>
+                  <button style={buttonStyle("outline")} onClick={handleRegister}>
+                    הרשמה
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
 
-          <TabsContent value="dashboard" className="space-y-6">
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div
+          style={{
+            background: "#fff",
+            borderRadius: 18,
+            padding: 6,
+            boxShadow: "0 8px 30px rgba(15,23,42,0.08)",
+            marginBottom: 24,
+            display: "grid",
+            gridTemplateColumns: "repeat(3, 1fr)",
+            gap: 6,
+          }}
+        >
+          {tabs.map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              style={{
+                borderRadius: 14,
+                border: "none",
+                padding: "12px 16px",
+                cursor: "pointer",
+                fontWeight: 700,
+                background: activeTab === tab.key ? "#0f172a" : "transparent",
+                color: activeTab === tab.key ? "#fff" : "#334155",
+              }}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {activeTab === "dashboard" && (
+          <div style={{ display: "grid", gap: 24 }}>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(4, 1fr)",
+                gap: 16,
+              }}
+            >
               <SummaryCard
                 title="סך הכנסות"
                 value={formatCurrency(summary.income)}
                 subtitle="לפי הסינון הנוכחי"
-                icon={<ArrowUpCircle className="h-6 w-6" />}
-                positive
+                icon={<ArrowUpCircle size={24} />}
+                color="#16a34a"
               />
               <SummaryCard
                 title="סך הוצאות"
                 value={formatCurrency(summary.expense)}
                 subtitle="לפי הסינון הנוכחי"
-                icon={<ArrowDownCircle className="h-6 w-6" />}
-                positive={false}
+                icon={<ArrowDownCircle size={24} />}
+                color="#dc2626"
               />
               <SummaryCard
                 title="יתרה"
                 value={formatCurrency(summary.balance)}
                 subtitle="הכנסות פחות הוצאות"
-                icon={<Wallet className="h-6 w-6" />}
+                icon={<Wallet size={24} />}
               />
               <SummaryCard
                 title="מספר עסקאות"
                 value={String(summary.count)}
                 subtitle="רשומות פעילות במערכת"
-                icon={<ReceiptText className="h-6 w-6" />}
+                icon={<ReceiptText size={24} />}
               />
             </div>
 
-            <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-              <Card className="rounded-3xl border-0 shadow-lg">
-                <CardHeader className="pb-0">
-                  <CardTitle className="text-xl">עסקאות אחרונות</CardTitle>
-                </CardHeader>
-                <CardContent className="pt-6">
-                  {latestTransactions.length === 0 ? (
-                    <EmptyState title="אין עדיין עסקאות להצגה" text="הוסף עסקה חדשה כדי להתחיל לנהל את הכספים שלך." />
-                  ) : (
-                    <div className="space-y-3">
-                      {latestTransactions.map((t) => (
-                        <div key={t.id} className="flex items-center justify-between rounded-2xl border border-slate-100 bg-slate-50 p-4">
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <p className="truncate font-semibold">{t.title}</p>
-                              <Badge variant="secondary" className="rounded-full">
-                                {t.type === "income" ? "הכנסה" : "הוצאה"}
-                              </Badge>
-                            </div>
-                            <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-500">
-                              <span>
-                                {t.category} · {t.paymentMethod || "אשראי"} · {formatDate(t.date)
-                              </span>
-                              <Badge variant="outline" className="rounded-full bg-white">
-                                {t.recurrence === "fixed" ? "קבועה" : "משתנה"}
-                              </Badge>
-                            </div>
-                          </div>
-                          <p className={`text-lg font-bold ${t.type === "income" ? "text-green-600" : "text-red-600"}`}>
-                            {t.type === "income" ? "+" : "-"}
-                            {formatCurrency(t.amount)}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1.2fr 0.8fr",
+                gap: 24,
+              }}
+            >
+              <div style={cardStyle()}>
+                <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 20 }}>
+                  עסקאות אחרונות
+                </div>
 
-              <Card className="rounded-3xl border-0 shadow-lg">
-                <CardHeader className="pb-0">
-                  <CardTitle className="text-xl">חלוקת הוצאות לפי קטגוריה</CardTitle>
-                </CardHeader>
-                <CardContent className="h-[380px] pt-6">
+                {latestTransactions.length === 0 ? (
+                  <EmptyState
+                    title="אין עדיין עסקאות להצגה"
+                    text="הוסף עסקה חדשה כדי להתחיל לנהל את הכספים שלך."
+                  />
+                ) : (
+                  <div style={{ display: "grid", gap: 12 }}>
+                    {latestTransactions.map((t) => (
+                      <div
+                        key={t.id}
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          gap: 16,
+                          background: "#f8fafc",
+                          border: "1px solid #e2e8f0",
+                          borderRadius: 18,
+                          padding: 16,
+                        }}
+                      >
+                        <div>
+                          <div style={{ fontWeight: 700 }}>{t.title}</div>
+                          <div style={{ marginTop: 6, color: "#64748b", fontSize: 14 }}>
+                            {t.category} · {formatDate(t.date)} ·{" "}
+                            {t.recurrence === "fixed" ? "קבועה" : "משתנה"}
+                          </div>
+                        </div>
+                        <div
+                          style={{
+                            fontWeight: 700,
+                            color: t.type === "income" ? "#16a34a" : "#dc2626",
+                          }}
+                        >
+                          {t.type === "income" ? "+" : "-"}
+                          {formatCurrency(t.amount)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div style={cardStyle()}>
+                <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 20 }}>
+                  חלוקת הוצאות לפי קטגוריה
+                </div>
+
+                <div style={{ width: "100%", height: 360 }}>
                   {expenseByCategory.length === 0 ? (
-                    <EmptyState title="אין נתוני הוצאות" text="כשתוסיף הוצאות, כאן תופיע התפלגות לפי קטגוריה." />
+                    <EmptyState
+                      title="אין נתוני הוצאות"
+                      text="כשתוסיף הוצאות, כאן תופיע התפלגות לפי קטגוריה."
+                    />
                   ) : (
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
-                        <Pie data={expenseByCategory} dataKey="value" nameKey="name" innerRadius={70} outerRadius={110} paddingAngle={3}>
+                        <Pie
+                          data={expenseByCategory}
+                          dataKey="value"
+                          nameKey="name"
+                          innerRadius={70}
+                          outerRadius={110}
+                          paddingAngle={3}
+                        >
                           {expenseByCategory.map((entry, index) => (
-                            <Cell key={entry.name} fill={chartColors[index % chartColors.length]} />
+                            <Cell
+                              key={entry.name}
+                              fill={chartColors[index % chartColors.length]}
+                            />
                           ))}
                         </Pie>
                         <Tooltip formatter={(value) => formatCurrency(value)} />
@@ -703,285 +948,490 @@ export default function FinancialPlatformHebrewRTL() {
                       </PieChart>
                     </ResponsiveContainer>
                   )}
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             </div>
-          </TabsContent>
+          </div>
+        )}
 
-          <TabsContent value="transactions" className="space-y-6">
-            <div className="grid items-start gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-              <Card className="rounded-3xl border-0 shadow-lg">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-xl">
-                    <Plus className="h-5 w-5" />
-                    {editingId ? "עריכת עסקה" : "הוספת עסקה חדשה"}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid gap-2">
-                    <Label>סוג עסקה</Label>
-                    <Select value={type} onValueChange={onTypeChange}>
-                      <SelectTrigger className="rounded-xl">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="income">הכנסה</SelectItem>
-                        <SelectItem value="expense">הוצאה</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+        {activeTab === "transactions" && (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "0.9fr 1.1fr",
+              gap: 24,
+              alignItems: "start",
+            }}
+          >
+            <div style={cardStyle()}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  fontSize: 22,
+                  fontWeight: 700,
+                  marginBottom: 20,
+                }}
+              >
+                <Pencil size={20} />
+                {editingId ? "עריכת עסקה" : "הוספת עסקה חדשה"}
+              </div>
 
-                  <div className="grid gap-2">
-                    <Label>תיאור</Label>
-                    <Input
-                      value={title}
-                      onChange={(e) => setTitle(e.target.value)}
-                      placeholder="למשל: משכורת / קניות / תשלום מספק"
-                      className="rounded-xl"
-                    />
-                  </div>
+              <div style={{ display: "grid", gap: 14 }}>
+                <div>
+                  <label style={{ display: "block", marginBottom: 8 }}>
+                    סוג עסקה
+                  </label>
+                  <select
+                    style={inputStyle()}
+                    value={type}
+                    onChange={(e) => onTypeChange(e.target.value)}
+                  >
+                    <option value="income">הכנסה</option>
+                    <option value="expense">הוצאה</option>
+                  </select>
+                </div>
 
-                  <div className="grid gap-2">
-                    <Label>קטגוריה</Label>
-                    <Select value={category} onValueChange={setCategory}>
-                      <SelectTrigger className="rounded-xl">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {availableCategories.map((cat) => (
-                          <SelectItem key={cat} value={cat}>
-                            {cat}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                <div>
+                  <label style={{ display: "block", marginBottom: 8 }}>תיאור</label>
+                  <input
+                    style={inputStyle()}
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="למשל: משכורת / קניות / תשלום מספק"
+                  />
+                </div>
 
-                  <div className="grid gap-2">
-                    <Label>סכום</Label>
-                    <Input
-                      type="number"
-                      value={amount}
-                      onChange={(e) => setAmount(e.target.value)}
-                      placeholder="הזן סכום"
-                      className="rounded-xl"
-                    />
-                  </div>
+                <div>
+                  <label style={{ display: "block", marginBottom: 8 }}>קטגוריה</label>
+                  <select
+                    style={inputStyle()}
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value)}
+                  >
+                    {availableCategories.map((cat) => (
+                      <option key={cat} value={cat}>
+                        {cat}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-                  <div className="grid gap-2">
-                    <Label>תאריך</Label>
-                    <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="rounded-xl" />
-                  </div>
+                <div>
+                  <label style={{ display: "block", marginBottom: 8 }}>סכום</label>
+                  <input
+                    style={inputStyle()}
+                    type="number"
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    placeholder="הזן סכום"
+                  />
+                </div>
 
-                  <div className="grid gap-2">
-                    <Label>אמצעי תשלום / מקור</Label>
-                    <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-                      <SelectTrigger className="rounded-xl">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {paymentMethodOptions.map((method) => (
-                          <SelectItem key={method} value={method}>
-                            {method}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                <div>
+                  <label style={{ display: "block", marginBottom: 8 }}>תאריך</label>
+                  <input
+                    style={inputStyle()}
+                    type="date"
+                    value={date}
+                    onChange={(e) => setDate(e.target.value)}
+                  />
+                </div>
 
-                  <div className="grid gap-2">
-                    <Label>אופי העסקה</Label>
-                    <Select value={recurrence} onValueChange={setRecurrence}>
-                      <SelectTrigger className="rounded-xl">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {recurrenceOptions.map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            {option.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                <div>
+                  <label style={{ display: "block", marginBottom: 8 }}>
+                    אופי העסקה
+                  </label>
+                  <select
+                    style={inputStyle()}
+                    value={recurrence}
+                    onChange={(e) => setRecurrence(e.target.value)}
+                  >
+                    {recurrenceOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-                  <div className="flex gap-2">
-                    <Button onClick={saveTransaction} className="w-full rounded-2xl text-base">
-                      {editingId ? "עדכן עסקה" : "שמור עסקה"}
-                    </Button>
-                    {editingId && (
-                      <Button onClick={resetForm} variant="outline" className="rounded-2xl">
-                        ביטול
-                      </Button>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="rounded-3xl border-0 shadow-lg">
-                <CardHeader className="gap-4 md:flex-row md:items-center md:justify-between">
-                  <CardTitle className="text-xl">רשימת עסקאות</CardTitle>
-                  <div className="grid gap-3 md:grid-cols-3">
-                    <Select value={filterType} onValueChange={setFilterType}>
-                      <SelectTrigger className="w-[170px] rounded-xl bg-white">
-                        <SelectValue placeholder="סינון לפי סוג" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">כל הסוגים</SelectItem>
-                        <SelectItem value="income">הכנסות בלבד</SelectItem>
-                        <SelectItem value="expense">הוצאות בלבד</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Select value={filterMonth} onValueChange={setFilterMonth}>
-                      <SelectTrigger className="w-[170px] rounded-xl bg-white">
-                        <SelectValue placeholder="סינון לפי חודש" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">כל החודשים</SelectItem>
-                        {monthOptions.map((m) => (
-                          <SelectItem key={m.key} value={m.key}>
-                            {m.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Select value={filterRecurrence} onValueChange={setFilterRecurrence}>
-                      <SelectTrigger className="w-[170px] rounded-xl bg-white">
-                        <SelectValue placeholder="סינון לפי אופי" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">קבועה + משתנה</SelectItem>
-                        <SelectItem value="fixed">קבועה בלבד</SelectItem>
-                        <SelectItem value="variable">משתנה בלבד</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="mb-4 flex flex-wrap gap-2">
-                    <Button onClick={createCurrentMonthFromFixedTransactions} variant="outline" className="rounded-2xl">
-                      <Sparkles className="ml-2 h-4 w-4" />
-                      צור לחודש הנוכחי עסקאות קבועות
-                    </Button>
-                    <Button onClick={exportToCSV} variant="outline" className="rounded-2xl">
-                      <Download className="ml-2 h-4 w-4" />
-                      ייצוא ל-CSV
-                    </Button>
-                    <Button onClick={printMonthlyReport} variant="outline" className="rounded-2xl">
-                      <FileText className="ml-2 h-4 w-4" />
-                      דוח חודשי להדפסה
-                    </Button>
-                    <Button
-                      onClick={resetAllData}
-                      variant="outline"
-                      className="rounded-2xl border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
-                    >
-                      אפס נתונים
-                    </Button>
-                  </div>
-
-                  {filteredTransactions.length === 0 ? (
-                    <EmptyState title="לא נמצאו עסקאות" text="נסה לשנות את הסינון או להוסיף עסקה חדשה." />
-                  ) : (
-                    <ScrollArea className="h-[420px] pr-1 md:h-[520px]">
-                      <div className="space-y-3">
-                        {[...filteredTransactions]
-                          .sort((a, b) => new Date(b.date) - new Date(a.date))
-                          .map((t) => (
-                            <motion.div
-                              key={t.id}
-                              initial={{ opacity: 0, y: 8 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              className="flex items-center justify-between rounded-2xl border border-slate-100 bg-slate-50 p-4"
-                            >
-                              <div className="min-w-0">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <p className="font-semibold text-slate-900">{t.title}</p>
-                                  <Badge
-                                    className={`rounded-full ${
-                                      t.type === "income"
-                                        ? "bg-green-100 text-green-700 hover:bg-green-100"
-                                        : "bg-red-100 text-red-700 hover:bg-red-100"
-                                    }`}
-                                  >
-                                    {t.type === "income" ? "הכנסה" : "הוצאה"}
-                                  </Badge>
-                                </div>
-                                <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-500">
-                                  <span>
-                                    {t.category} · {t.paymentMethod || "אשראי"} · {formatDate(t.date)
-                                  </span>
-                                  <Badge
-                                    variant="outline"
-                                    className={`rounded-full ${
-                                      t.recurrence === "fixed"
-                                        ? "border-blue-200 bg-blue-50 text-blue-700"
-                                        : "border-amber-200 bg-amber-50 text-amber-700"
-                                    }`}
-                                  >
-                                    <span className="flex items-center gap-1">
-                                      {t.recurrence === "fixed" ? <Repeat className="h-3.5 w-3.5" /> : <Shuffle className="h-3.5 w-3.5" />}
-                                      {t.recurrence === "fixed" ? "קבועה" : "משתנה"}
-                                    </span>
-                                  </Badge>
-                                </div>
-                              </div>
-                              <div className="mr-4 flex items-center gap-3">
-                                <p className={`min-w-[120px] text-left text-lg font-bold ${t.type === "income" ? "text-green-600" : "text-red-600"}`}>
-                                  {t.type === "income" ? "+" : "-"}
-                                  {formatCurrency(t.amount)}
-                                </p>
-                                <Button variant="outline" size="icon" className="rounded-xl" onClick={() => startEditTransaction(t)}>
-                                  <Pencil className="h-4 w-4" />
-                                </Button>
-                                <Dialog>
-                                  <DialogTrigger asChild>
-                                    <Button variant="outline" size="icon" className="rounded-xl">
-                                      <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                  </DialogTrigger>
-                                  <DialogContent className="rounded-3xl">
-                                    <DialogHeader>
-                                      <DialogTitle>למחוק את העסקה?</DialogTitle>
-                                    </DialogHeader>
-                                    <div className="space-y-4 text-sm text-slate-600">
-                                      <p>
-                                        העסקה <span className="font-semibold">{t.title}</span> תוסר מהרשימה.
-                                      </p>
-                                      <div className="flex justify-end gap-3">
-                                        <Button variant="outline" className="rounded-xl">
-                                          ביטול
-                                        </Button>
-                                        <Button variant="destructive" className="rounded-xl" onClick={() => removeTransaction(t.id)}>
-                                          מחיקה
-                                        </Button>
-                                      </div>
-                                    </div>
-                                  </DialogContent>
-                                </Dialog>
-                              </div>
-                            </motion.div>
-                          ))}
-                      </div>
-                    </ScrollArea>
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button style={{ ...buttonStyle(), width: "100%" }} onClick={saveTransaction}>
+                    {editingId ? "עדכן עסקה" : "שמור עסקה"}
+                  </button>
+                  {editingId && (
+                    <button style={buttonStyle("outline")} onClick={resetForm}>
+                      ביטול
+                    </button>
                   )}
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             </div>
-          </TabsContent>
 
-          <TabsContent value="reports" className="space-y-6">
-            <div className="grid gap-6 xl:grid-cols-2">
-              <Card className="rounded-3xl border-0 shadow-lg">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-xl">
-                    <TrendingUp className="h-5 w-5" />
-                    מגמת הכנסות מול הוצאות
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="h-[420px]">
+            <div style={cardStyle()}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: 16,
+                  flexWrap: "wrap",
+                  marginBottom: 20,
+                }}
+              >
+                <div style={{ fontSize: 22, fontWeight: 700 }}>רשימת עסקאות</div>
+
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                  <select
+                    style={{ ...inputStyle(), width: 170 }}
+                    value={filterType}
+                    onChange={(e) => setFilterType(e.target.value)}
+                  >
+                    <option value="all">כל הסוגים</option>
+                    <option value="income">הכנסות בלבד</option>
+                    <option value="expense">הוצאות בלבד</option>
+                  </select>
+
+                  <select
+                    style={{ ...inputStyle(), width: 170 }}
+                    value={filterMonth}
+                    onChange={(e) => setFilterMonth(e.target.value)}
+                  >
+                    <option value="all">כל החודשים</option>
+                    {monthOptions.map((m) => (
+                      <option key={m.key} value={m.key}>
+                        {m.label}
+                      </option>
+                    ))}
+                  </select>
+
+                  <select
+                    style={{ ...inputStyle(), width: 170 }}
+                    value={filterRecurrence}
+                    onChange={(e) => setFilterRecurrence(e.target.value)}
+                  >
+                    <option value="all">קבועה + משתנה</option>
+                    <option value="fixed">קבועה בלבד</option>
+                    <option value="variable">משתנה בלבד</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 18 }}>
+                <button
+                  style={buttonStyle("outline")}
+                  onClick={createCurrentMonthFromFixedTransactions}
+                >
+                  <Sparkles size={16} style={{ marginLeft: 6 }} />
+                  צור לחודש הנוכחי עסקאות קבועות
+                </button>
+
+                <button style={buttonStyle("outline")} onClick={exportToCSV}>
+                  <Download size={16} style={{ marginLeft: 6 }} />
+                  ייצוא ל-CSV
+                </button>
+
+                <button style={buttonStyle("outline")} onClick={printMonthlyReport}>
+                  <FileText size={16} style={{ marginLeft: 6 }} />
+                  דוח חודשי להדפסה
+                </button>
+
+                <button style={buttonStyle("outline")} onClick={resetAllData}>
+                  אפס נתונים
+                </button>
+              </div>
+
+              {filteredTransactions.length === 0 ? (
+                <EmptyState
+                  title="לא נמצאו עסקאות"
+                  text="נסה לשנות את הסינון או להוסיף עסקה חדשה."
+                />
+              ) : (
+                <div style={{ display: "grid", gap: 12, maxHeight: 560, overflow: "auto" }}>
+                  {[...filteredTransactions]
+                    .sort((a, b) => new Date(b.date) - new Date(a.date))
+                    .map((t) => (
+                      <div
+                        key={t.id}
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          gap: 14,
+                          background: "#f8fafc",
+                          border: "1px solid #e2e8f0",
+                          borderRadius: 18,
+                          padding: 16,
+                        }}
+                      >
+                        <div>
+                          <div
+                            style={{
+                              display: "flex",
+                              gap: 8,
+                              alignItems: "center",
+                              flexWrap: "wrap",
+                            }}
+                          >
+                            <strong>{t.title}</strong>
+                            <span
+                              style={{
+                                fontSize: 12,
+                                borderRadius: 999,
+                                padding: "4px 10px",
+                                background:
+                                  t.type === "income" ? "#dcfce7" : "#fee2e2",
+                                color:
+                                  t.type === "income" ? "#166534" : "#991b1b",
+                              }}
+                            >
+                              {t.type === "income" ? "הכנסה" : "הוצאה"}
+                            </span>
+                          </div>
+
+                          <div
+                            style={{
+                              marginTop: 8,
+                              display: "flex",
+                              gap: 8,
+                              flexWrap: "wrap",
+                              color: "#64748b",
+                              fontSize: 14,
+                            }}
+                          >
+                            <span>
+                              {t.category} · {formatDate(t.date)}
+                            </span>
+                            <span
+                              style={{
+                                borderRadius: 999,
+                                padding: "4px 10px",
+                                border: "1px solid #cbd5e1",
+                                background:
+                                  t.recurrence === "fixed"
+                                    ? "#dbeafe"
+                                    : "#fef3c7",
+                                color:
+                                  t.recurrence === "fixed"
+                                    ? "#1d4ed8"
+                                    : "#92400e",
+                              }}
+                            >
+                              {t.recurrence === "fixed" ? "קבועה" : "משתנה"}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 10,
+                          }}
+                        >
+                          <div
+                            style={{
+                              minWidth: 120,
+                              textAlign: "left",
+                              fontWeight: 700,
+                              color:
+                                t.type === "income" ? "#16a34a" : "#dc2626",
+                            }}
+                          >
+                            {t.type === "income" ? "+" : "-"}
+                            {formatCurrency(t.amount)}
+                          </div>
+
+                          <button
+                            style={buttonStyle("outline")}
+                            onClick={() => startEditTransaction(t)}
+                          >
+                            <Pencil size={16} />
+                          </button>
+
+                          <button
+                            style={buttonStyle("outline")}
+                            onClick={() => removeTransaction(t.id)}
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {activeTab === "reports" && (
+          <div style={{ display: "grid", gap: 24 }}>
+            <div style={cardStyle()}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: 16,
+                  flexWrap: "wrap",
+                  marginBottom: 20,
+                }}
+              >
+                <div style={{ fontSize: 22, fontWeight: 700 }}>
+                  ניהול תקציב חודשי לפי קטגוריה
+                </div>
+                <button style={buttonStyle("outline")} onClick={resetBudgets}>
+                  אפס תקציבים לברירת מחדל
+                </button>
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(3, 1fr)",
+                  gap: 16,
+                }}
+              >
+                {expenseCategories.map((categoryName) => {
+                  const status = budgetStatus.find(
+                    (item) => item.category === categoryName
+                  );
+
+                  return (
+                    <div
+                      key={categoryName}
+                      style={{
+                        border: "1px solid #e2e8f0",
+                        borderRadius: 18,
+                        padding: 16,
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          gap: 12,
+                          marginBottom: 12,
+                          alignItems: "center",
+                        }}
+                      >
+                        <strong>{categoryName}</strong>
+                        <span
+                          style={{
+                            fontSize: 12,
+                            borderRadius: 999,
+                            padding: "4px 10px",
+                            background: status?.overBudget ? "#fee2e2" : "#dcfce7",
+                            color: status?.overBudget ? "#991b1b" : "#166534",
+                          }}
+                        >
+                          {status?.overBudget ? "חריגה" : "תקין"}
+                        </span>
+                      </div>
+
+                      <label style={{ display: "block", marginBottom: 8 }}>
+                        תקציב חודשי
+                      </label>
+                      <input
+                        style={inputStyle()}
+                        type="number"
+                        value={budgets[categoryName] ?? 0}
+                        onChange={(e) => updateBudget(categoryName, e.target.value)}
+                      />
+
+                      <div style={{ marginTop: 14, fontSize: 14, color: "#475569" }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            marginBottom: 10,
+                          }}
+                        >
+                          <span>הוצאה בפועל</span>
+                          <strong>{formatCurrency(status?.spent || 0)}</strong>
+                        </div>
+
+                        <div
+                          style={{
+                            height: 10,
+                            background: "#e2e8f0",
+                            borderRadius: 999,
+                            overflow: "hidden",
+                            marginBottom: 10,
+                          }}
+                        >
+                          <div
+                            style={{
+                              height: "100%",
+                              width: `${Math.min(status?.percent || 0, 100)}%`,
+                              background: status?.overBudget ? "#ef4444" : "#10b981",
+                            }}
+                          />
+                        </div>
+
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            marginBottom: 8,
+                          }}
+                        >
+                          <span>ניצול תקציב</span>
+                          <span>{status?.budget ? `${status.percent}%` : "לא הוגדר"}</span>
+                        </div>
+
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                          }}
+                        >
+                          <span>יתרה</span>
+                          <strong
+                            style={{
+                              color:
+                                (status?.remaining || 0) < 0 ? "#dc2626" : "#16a34a",
+                            }}
+                          >
+                            {formatCurrency(status?.remaining || 0)}
+                          </strong>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: 24,
+              }}
+            >
+              <div style={cardStyle()}>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    fontSize: 22,
+                    fontWeight: 700,
+                    marginBottom: 20,
+                  }}
+                >
+                  <TrendingUp size={20} />
+                  מגמת הכנסות מול הוצאות
+                </div>
+
+                <div style={{ width: "100%", height: 420 }}>
                   {monthlyData.length === 0 ? (
-                    <EmptyState title="אין מספיק נתונים לדוח" text="הוסף עסקאות במספר חודשים כדי לראות מגמה." />
+                    <EmptyState
+                      title="אין מספיק נתונים לדוח"
+                      text="הוסף עסקאות במספר חודשים כדי לראות מגמה."
+                    />
                   ) : (
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={monthlyData}>
@@ -990,5 +1440,154 @@ export default function FinancialPlatformHebrewRTL() {
                         <YAxis />
                         <Tooltip formatter={(value) => formatCurrency(value)} />
                         <Legend />
-                        <Bar dataKey="הכנסות" radius={[8, 8, 0, 0]} fill="#16a34a" />
-                        <Bar dataKey="הוצאות" radius={[8, 8, 0, 0]} fill="#dc2626" />
+                        <Bar dataKey="הכנסות" fill="#16a34a" radius={[8, 8, 0, 0]} />
+                        <Bar dataKey="הוצאות" fill="#dc2626" radius={[8, 8, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+              </div>
+
+              <div style={cardStyle()}>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    fontSize: 22,
+                    fontWeight: 700,
+                    marginBottom: 20,
+                  }}
+                >
+                  <PieChartIcon size={20} />
+                  תובנות מרכזיות
+                </div>
+
+                <div
+                  style={{
+                    background: "#f8fafc",
+                    borderRadius: 18,
+                    padding: 16,
+                    marginBottom: 16,
+                  }}
+                >
+                  <div style={{ color: "#64748b", fontSize: 14 }}>היתרה הנוכחית</div>
+                  <div style={{ marginTop: 8, fontSize: 32, fontWeight: 700 }}>
+                    {formatCurrency(summary.balance)}
+                  </div>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                  <div
+                    style={{
+                      background: "#dcfce7",
+                      borderRadius: 18,
+                      padding: 16,
+                    }}
+                  >
+                    <div style={{ color: "#166534", fontSize: 14 }}>
+                      הכנסה ממוצעת לעסקה
+                    </div>
+                    <div
+                      style={{
+                        marginTop: 8,
+                        fontSize: 26,
+                        fontWeight: 700,
+                        color: "#166534",
+                      }}
+                    >
+                      {formatCurrency(
+                        (() => {
+                          const rows = filteredTransactions.filter(
+                            (t) => t.type === "income"
+                          );
+                          return rows.length
+                            ? rows.reduce((sum, t) => sum + t.amount, 0) / rows.length
+                            : 0;
+                        })()
+                      )}
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      background: "#fee2e2",
+                      borderRadius: 18,
+                      padding: 16,
+                    }}
+                  >
+                    <div style={{ color: "#991b1b", fontSize: 14 }}>
+                      הוצאה ממוצעת לעסקה
+                    </div>
+                    <div
+                      style={{
+                        marginTop: 8,
+                        fontSize: 26,
+                        fontWeight: 700,
+                        color: "#991b1b",
+                      }}
+                    >
+                      {formatCurrency(
+                        (() => {
+                          const rows = filteredTransactions.filter(
+                            (t) => t.type === "expense"
+                          );
+                          return rows.length
+                            ? rows.reduce((sum, t) => sum + t.amount, 0) / rows.length
+                            : 0;
+                        })()
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ ...cardStyle(), marginTop: 16, padding: 16 }}>
+                  <div style={{ color: "#64748b", fontSize: 14 }}>
+                    הקטגוריה המובילה בהוצאות
+                  </div>
+                  <div style={{ marginTop: 8, fontSize: 24, fontWeight: 700 }}>
+                    {expenseByCategory.length
+                      ? [...expenseByCategory].sort((a, b) => b.value - a.value)[0]
+                          .name
+                      : "אין עדיין נתונים"}
+                  </div>
+                </div>
+
+                <div style={{ ...cardStyle(), marginTop: 16, padding: 16 }}>
+                  <div style={{ color: "#64748b", fontSize: 14 }}>
+                    חריגות תקציב פעילות
+                  </div>
+                  <div style={{ marginTop: 8, fontSize: 24, fontWeight: 700 }}>
+                    {budgetStatus.filter((item) => item.overBudget).length}
+                  </div>
+                  <div style={{ marginTop: 8, color: "#64748b", fontSize: 14 }}>
+                    {budgetStatus.filter((item) => item.overBudget).length
+                      ? `יש כרגע חריגה ב-${
+                          budgetStatus.filter((item) => item.overBudget).length
+                        } קטגוריות.`
+                      : "אין כרגע חריגות תקציב לפי הסינון הנוכחי."}
+                  </div>
+                </div>
+
+                <div style={{ ...cardStyle(), marginTop: 16, padding: 16 }}>
+                  <div style={{ color: "#64748b", fontSize: 14 }}>סטטוס מהיר</div>
+                  <div
+                    style={{
+                      marginTop: 8,
+                      lineHeight: 1.8,
+                      color: "#334155",
+                    }}
+                  >
+                    {summary.balance >= 0
+                      ? "המצב הכספי הנוכחי חיובי. ניתן להמשיך לעקוב אחר דפוסי ההוצאות ולזהות הזדמנויות לחיסכון נוסף."
+                      : "כרגע ההוצאות גבוהות מההכנסות במסגרת הסינון הנוכחי. מומלץ לבדוק אילו קטגוריות מכבידות ביותר."}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
